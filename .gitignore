@@ -1,0 +1,22 @@
+# Local environment
+.DS_Store
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Editor
+.idea/
+.vscode/
+
+# Runtime outputs
+dist/
+build/
+.cache/
+tmp/
+logs/
+
+# Local data
+project_data/
+data/
+
