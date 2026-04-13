@@ -1,0 +1,44 @@
+{
+  "ui_mode": "chain2",
+  "title": "Chain2 Demo Batch",
+  "filter_source_label": "fmm/line/od",
+  "uids": [
+    "1001",
+    "1002",
+    "1003"
+  ],
+  "layers": [
+    "raw",
+    "snap",
+    "od",
+    "fmm",
+    "line"
+  ],
+  "states": {
+    "1001": [
+      "road",
+      "stay"
+    ],
+    "1002": [
+      "stay"
+    ],
+    "1003": [
+      "road",
+      "subway"
+    ]
+  },
+  "filter_state_options": [
+    "road",
+    "subway",
+    "railway",
+    "unmatch",
+    "stay"
+  ],
+  "layer_visibility": {
+    "raw": false,
+    "snap": true,
+    "od": false,
+    "fmm": true,
+    "line": true
+  }
+}

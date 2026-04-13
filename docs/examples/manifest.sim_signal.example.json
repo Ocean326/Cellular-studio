@@ -1,0 +1,39 @@
+{
+  "ui_mode": "sim_signal",
+  "title": "Sim Signal Demo Batch",
+  "filter_source_label": "gps/signal",
+  "uids": [
+    "u001",
+    "u002"
+  ],
+  "layers": [
+    "gps",
+    "signal",
+    "stations"
+  ],
+  "states": {
+    "u001": [
+      "move"
+    ],
+    "u002": [
+      "ping_pong",
+      "long_jump"
+    ]
+  },
+  "filter_state_options": [
+    "move",
+    "stay",
+    "ping_pong",
+    "long_jump"
+  ],
+  "point_status_types": [
+    "move",
+    "stay"
+  ],
+  "long_jump_threshold_m": 3000,
+  "layer_visibility": {
+    "gps": true,
+    "signal": true,
+    "stations": false
+  }
+}

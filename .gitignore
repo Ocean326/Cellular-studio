@@ -4,10 +4,18 @@
 venv/
 __pycache__/
 *.pyc
+.python-version
+.env
+.env.*
+*.local.json
+*.local.toml
+*.local.yaml
+*.local.yml
 
 # Editor
 .idea/
 .vscode/
+*.code-workspace
 
 # Runtime outputs
 dist/
@@ -15,8 +23,17 @@ build/
 .cache/
 tmp/
 logs/
+coverage/
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+node_modules/
 
 # Local data
 project_data/
 data/
+configs/local/
 
+# Local backups / experiments
+_backup_*/
+scratch/

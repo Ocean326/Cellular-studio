@@ -1,0 +1,15 @@
+{
+  "name": "20260413_v1_teamA_chain2_demo",
+  "label": "Team A Chain2 Demo",
+  "version": "v1",
+  "created_at": "2026-04-13T08:00:00Z",
+  "keywords": [
+    "annotation-studio",
+    "teamA",
+    "chain2",
+    "demo"
+  ],
+  "source_result_root": "/srv/trajectory_annotation_studio/shared/result/teamA_chain2_demo",
+  "result_mode": "mounted",
+  "uid_count": 1200
+}
