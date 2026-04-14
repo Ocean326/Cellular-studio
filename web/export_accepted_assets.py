@@ -15,6 +15,11 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--review-root", default=None, help="Override review ledger root")
 	parser.add_argument("--export-root", default=None, help="Override accepted export root")
 	parser.add_argument(
+		"--reviewer-id",
+		default=None,
+		help="Reviewer namespace to export from. Required when reviewer namespaces are enabled.",
+	)
+	parser.add_argument(
 		"--clean",
 		action="store_true",
 		help="Remove the existing export root before writing new accepted assets",
@@ -30,10 +35,13 @@ def main() -> None:
 		review_root=args.review_root,
 		export_root=args.export_root,
 	)
-	manifest = export_accepted_assets(paths, clean=args.clean)
+	manifest = export_accepted_assets(
+		paths,
+		clean=args.clean,
+		reviewer_id=args.reviewer_id,
+	)
 	print(json.dumps(manifest, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
 	main()
-

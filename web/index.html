@@ -47,42 +47,123 @@
 		#sidebar-toggle:hover { opacity: 1; }
 		#sidebar-content { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 		#batch-panel {
-			padding: 8px 10px 4px; background: #fff; border-bottom: 1px solid #ddd;
-			display: flex; flex-direction: column; gap: 6px;
+			padding: 8px 10px 6px; background: #fff; border-bottom: 1px solid #ddd;
+			display: flex; flex-direction: column; gap: 5px;
 		}
 		#batch-label-row {
 			display: flex; align-items: center; justify-content: space-between; gap: 8px;
-			font-size: 12px; color: #334155; font-weight: 600;
+			font-size: 11px; color: #334155; font-weight: 700;
 		}
 		#batch-select {
-			width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px;
+			width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px;
 			background: #fff;
 		}
-		#batch-status { margin: 0; }
+		#batch-status {
+			margin: 0; font-size: 11px; line-height: 1.45; color: #64748b;
+			white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+		}
+		#reviewer-badge-row {
+			display: flex; align-items: center; justify-content: space-between; gap: 8px;
+		}
+		.reviewer-chip {
+			display: inline-flex; align-items: center; gap: 6px;
+			max-width: 100%; padding: 5px 9px; border-radius: 999px;
+			background: #f8fafc; border: 1px solid #dbe3ea; color: #334155;
+			font-size: 11px; font-weight: 700; overflow: hidden;
+		}
+		.reviewer-chip-text {
+			overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+		}
+		.reviewer-switch-btn {
+			padding: 5px 9px; border: 1px solid #dbe3ea; border-radius: 999px;
+			background: #fff; color: #334155; cursor: pointer; font-size: 12px; font-weight: 600;
+		}
+		.reviewer-switch-btn:hover { background: #f8fafc; }
 		#search-box {
-			margin: 8px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
+			margin: 6px 8px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px;
 		}
 		#filter-panel {
-			padding: 8px 10px 2px; background: #fff; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd;
+			padding: 8px 10px; background: #fff; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd;
+			display: flex; flex-direction: column; gap: 6px;
 		}
-		.filter-title { font-size: 12px; color: #444; margin-bottom: 6px; font-weight: 600; }
-		.filter-row { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-bottom: 6px; font-size: 12px; }
+		.sidebar-section-head {
+			display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+		}
+		.sidebar-section-title-wrap {
+			min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px;
+		}
+		.sidebar-section-title {
+			font-size: 12px; color: #1f2937; font-weight: 700;
+		}
+		.sidebar-section-summary {
+			font-size: 11px; color: #64748b; line-height: 1.45;
+			white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+		}
+		.sidebar-section-toggle {
+			flex: 0 0 auto; padding: 4px 8px; border: 1px solid #dbe3ea; border-radius: 999px;
+			background: #fff; color: #475569; cursor: pointer; font-size: 11px; font-weight: 700;
+		}
+		.sidebar-section-toggle:hover { background: #f8fafc; }
+		#filter-panel.collapsed #filter-panel-body { display: none; }
+		#filter-panel-body {
+			display: flex; flex-direction: column; gap: 6px;
+		}
+		.filter-title { font-size: 12px; color: #444; font-weight: 600; }
+		.filter-row { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 0; font-size: 12px; }
 		.filter-row label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 		#filter-mode { border: 1px solid #ccc; border-radius: 4px; font-size: 12px; padding: 2px 6px; }
 		#triage-board-wrap {
 			flex: 1; min-height: 0; overflow: auto; padding: 8px; background: #fafafa;
 			border-top: 1px solid #ddd; border-bottom: 1px solid #ddd;
+			display: flex; flex-direction: column; gap: 8px;
+		}
+		#triage-board-toolbar {
+			display: flex; align-items: center; justify-content: space-between; gap: 8px;
+			position: sticky; top: 0; z-index: 2; background: rgba(250,250,250,0.94); backdrop-filter: blur(8px);
+			padding-bottom: 2px;
+		}
+		.triage-board-label {
+			font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #475569;
+		}
+		.triage-board-summary {
+			font-size: 11px; color: #64748b; line-height: 1.4;
+			white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+		}
+		#triage-board-toolbar-left {
+			min-width: 0; display: flex; flex-direction: column; gap: 2px;
+		}
+		#triage-column-tabs {
+			display: none; flex-wrap: wrap; justify-content: flex-end; gap: 6px;
+		}
+		#triage-column-tabs.visible {
+			display: flex;
+		}
+		.triage-tab {
+			display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px;
+			border: 1px solid #dbe3ea; border-radius: 999px; background: #fff; color: #334155;
+			cursor: pointer; font-size: 11px; font-weight: 700;
+		}
+		.triage-tab:hover { background: #f8fafc; }
+		.triage-tab.active {
+			background: #e8f3ff; border-color: #90caf9; color: #0f4c81;
+		}
+		.triage-tab-count {
+			display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px;
+			padding: 0 5px; border-radius: 999px; background: rgba(15,23,42,0.08); color: inherit; font-size: 10px; font-weight: 800;
 		}
 		#triage-board {
-			display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 10px; min-width: 580px;
+			display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; min-width: 0;
+		}
+		#triage-board.mode-stack {
+			display: block;
 		}
 		.triage-column {
 			display: flex; flex-direction: column; min-height: 220px; background: #fff;
 			border: 1px solid #d8dee4; border-radius: 10px; overflow: hidden;
 		}
 		.triage-column-header {
-			padding: 10px 10px 8px; border-bottom: 1px solid #e5e7eb; background: #f8fafc;
-			display: flex; flex-direction: column; gap: 6px;
+			padding: 9px 10px 8px; border-bottom: 1px solid #e5e7eb; background: #f8fafc;
+			display: flex; flex-direction: column; gap: 5px;
 		}
 		.triage-title-row {
 			display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -95,12 +176,12 @@
 			background: #fff;
 		}
 		.triage-card-list {
-			display: flex; flex-direction: column; gap: 6px; padding: 8px; min-height: 0;
+			display: flex; flex-direction: column; gap: 7px; padding: 8px; min-height: 0;
 		}
 		.triage-card {
-			width: 100%; padding: 9px 10px; border: 1px solid #dbe3ea; border-radius: 8px; cursor: pointer;
+			width: 100%; padding: 10px; border: 1px solid #dbe3ea; border-radius: 9px; cursor: pointer;
 			background: #fff; text-align: left; font-size: 12px; color: #1f2937;
-			display: flex; flex-direction: column; gap: 6px;
+			display: flex; flex-direction: column; gap: 4px;
 		}
 		.triage-card:hover { border-color: #90caf9; background: #f8fbff; }
 		.triage-card.active {
@@ -109,11 +190,11 @@
 		.triage-card-top {
 			display: flex; align-items: center; justify-content: space-between; gap: 8px;
 		}
-		.uid-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
-		.triage-card-meta { font-size: 11px; color: #475569; line-height: 1.45; }
+		.uid-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 800; }
+		.triage-card-meta { font-size: 11px; color: #475569; line-height: 1.35; }
 		.triage-card-note {
 			font-size: 11px; color: #64748b; line-height: 1.45;
-			display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+			display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
 		}
 		.triage-empty {
 			padding: 18px 12px; color: #94a3b8; font-size: 12px; line-height: 1.5; text-align: center;
@@ -126,36 +207,121 @@
 		.review-badge.reject { background: #fde2e1; color: #c62828; }
 		.review-badge.skip { background: #eceff1; color: #546e7a; }
 		#review-panel {
-			padding: 10px; background: #fff; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd;
-			display: flex; flex-direction: column; gap: 8px;
+			padding: 9px 10px; background: #fff; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd;
+			display: flex; flex-direction: column; gap: 7px;
 		}
 		#review-panel h4 { margin: 0; font-size: 13px; }
-		#review-current { font-size: 12px; color: #333; }
+		#review-current { font-size: 11px; color: #475569; line-height: 1.45; }
+		#review-panel-head {
+			display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+		}
+		#review-title-wrap {
+			min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px;
+		}
+		.review-identity-row {
+			display: flex; align-items: center; justify-content: space-between; gap: 8px;
+			padding: 7px 9px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0;
+		}
+		.review-identity-text {
+			min-width: 0; display: flex; flex-direction: column; gap: 2px;
+		}
+		.review-identity-label { font-size: 11px; color: #64748b; }
+		.review-identity-value {
+			font-size: 12px; color: #0f172a; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+		}
 		.review-nav { display: flex; gap: 8px; }
 		.review-nav button, .review-actions button {
-			flex: 1; padding: 8px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+			flex: 1; padding: 7px 8px; border: none; border-radius: 7px; cursor: pointer; font-size: 11px; font-weight: 700;
 		}
 		.review-nav button:disabled { opacity: 0.45; cursor: not-allowed; }
 		#prev-pending-btn, #next-pending-btn { background: #eef2ff; color: #334155; }
 		.review-decisions { display: flex; gap: 6px; }
 		.review-decision-btn {
 			flex: 1; border: 1px solid #cfd8dc; background: #f8f9fa; border-radius: 6px; cursor: pointer;
-			padding: 7px 8px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+			padding: 6px 8px; font-size: 11px; font-weight: 700; text-transform: uppercase;
 		}
 		.review-decision-btn.active { color: #fff; border-color: transparent; }
 		.review-decision-btn[data-decision="accept"].active { background: #2e7d32; }
 		.review-decision-btn[data-decision="reject"].active { background: #c62828; }
 		.review-decision-btn[data-decision="skip"].active { background: #546e7a; }
 		.review-input, #review-notes {
-			width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 12px;
+			width: 100%; padding: 7px 9px; border: 1px solid #ccc; border-radius: 7px; font-size: 12px;
 			font-family: inherit; background: #fff;
 		}
-		#review-notes { min-height: 76px; resize: vertical; }
+		#review-notes { min-height: 58px; resize: vertical; }
 		.review-actions { display: flex; gap: 8px; }
 		#save-review-btn { background: #2196f3; color: #fff; }
 		#refresh-review-btn { background: #eceff1; color: #263238; }
 		.review-meta { font-size: 11px; color: #666; line-height: 1.4; }
 		#review-dirty-status.is-dirty { color: #c62828; font-weight: 600; }
+		#review-aggregate-panel {
+			display: flex; flex-direction: column; gap: 6px; padding: 8px 10px;
+			border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc;
+		}
+		.review-aggregate-header {
+			display: flex; align-items: center; justify-content: space-between; gap: 8px;
+			font-size: 12px; font-weight: 700; color: #1f2937;
+			width: 100%; border: none; background: transparent; padding: 0; cursor: pointer; text-align: left; font: inherit;
+		}
+		.review-aggregate-summary { font-size: 11px; color: #64748b; line-height: 1.5; }
+		.review-aggregate-list { display: flex; flex-direction: column; gap: 6px; max-height: 158px; overflow: auto; }
+		#review-aggregate-panel.collapsed .review-aggregate-list { display: none; }
+		.review-aggregate-item {
+			padding: 8px 9px; border-radius: 8px; border: 1px solid #dbe3ea; background: #fff;
+			display: flex; flex-direction: column; gap: 4px;
+		}
+		.review-aggregate-item-top {
+			display: flex; align-items: center; justify-content: space-between; gap: 8px;
+		}
+		.review-aggregate-name { font-size: 12px; font-weight: 700; color: #0f172a; }
+		.review-aggregate-meta { font-size: 11px; color: #64748b; line-height: 1.45; }
+		.review-aggregate-note { font-size: 11px; color: #475569; line-height: 1.45; }
+		.review-aggregate-empty {
+			padding: 10px 0; font-size: 11px; color: #94a3b8; text-align: center;
+		}
+		.review-aggregate-toggle-text {
+			font-size: 11px; color: #64748b; font-weight: 700; white-space: nowrap;
+		}
+		.reviewers-count-badge {
+			display: inline-flex; align-items: center; justify-content: center; min-width: 34px;
+			padding: 2px 7px; border-radius: 999px; background: #eef2ff; color: #334155;
+			font-size: 10px; font-weight: 700;
+		}
+
+		#reviewer-session-overlay {
+			position: fixed; inset: 0; z-index: 5000; display: none; align-items: center; justify-content: center;
+			background: rgba(15, 23, 42, 0.28); backdrop-filter: blur(10px);
+			padding: 20px;
+		}
+		#reviewer-session-overlay.open { display: flex; }
+		#reviewer-session-modal {
+			width: min(440px, calc(100vw - 28px)); padding: 18px 18px 16px; border-radius: 20px;
+			border: 1px solid rgba(255,255,255,0.28); background: rgba(255,255,255,0.82);
+			box-shadow: 0 18px 60px rgba(15,23,42,0.20); display: flex; flex-direction: column; gap: 12px;
+		}
+		#reviewer-session-title { font-size: 18px; font-weight: 800; color: #0f172a; }
+		#reviewer-session-subtitle { font-size: 12px; color: #475569; line-height: 1.6; }
+		#reviewer-session-input {
+			width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #cbd5e1;
+			background: rgba(255,255,255,0.92); color: #0f172a; font: inherit; font-size: 14px;
+		}
+		#reviewer-session-known {
+			display: flex; flex-wrap: wrap; gap: 8px;
+		}
+		.reviewer-known-btn {
+			padding: 6px 10px; border-radius: 999px; border: 1px solid #dbe3ea; background: rgba(255,255,255,0.92);
+			color: #334155; cursor: pointer; font-size: 12px; font-weight: 600;
+		}
+		.reviewer-known-btn:hover { background: #f8fafc; }
+		#reviewer-session-actions {
+			display: flex; justify-content: flex-end; gap: 8px;
+		}
+		#reviewer-session-submit, #reviewer-session-cancel {
+			padding: 8px 12px; border-radius: 10px; border: 1px solid transparent; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+		}
+		#reviewer-session-submit { background: #111827; color: #fff; }
+		#reviewer-session-cancel { background: rgba(255,255,255,0.7); color: #334155; border-color: #dbe3ea; }
+		#reviewer-session-status { min-height: 18px; }
 
 		#map-tools-dock {
 			position: absolute; right: 12px; bottom: 52px; z-index: 1000;
@@ -534,6 +700,9 @@
 			display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
 			font-size: 13px; color: #f8fafc; letter-spacing: 0.02em; white-space: nowrap;
 		}
+		.date-window-group {
+			display: inline-flex; align-items: center; gap: 5px; min-width: 0;
+		}
 		.date-window-edge {
 			border: none; background: transparent; color: inherit; cursor: pointer;
 			padding: 2px 8px; border-radius: 999px; font: inherit; line-height: 1.2;
@@ -543,6 +712,20 @@
 		.date-window-edge.hovered,
 		.date-window-edge.active {
 			background: rgba(255,255,255,0.18); color: #ffffff; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+		}
+		.date-window-nudge {
+			width: 18px; height: 18px; padding: 0;
+			border: none; border-radius: 999px; cursor: pointer;
+			background: rgba(255,255,255,0.08); color: rgba(248,250,252,0.92);
+			font: inherit; font-size: 11px; line-height: 1;
+			display: inline-flex; align-items: center; justify-content: center;
+			transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease, opacity 0.16s ease;
+		}
+		.date-window-nudge:hover:not(:disabled) {
+			background: rgba(255,255,255,0.18); color: #ffffff; transform: translateY(-0.5px);
+		}
+		.date-window-nudge:disabled {
+			opacity: 0.36; cursor: not-allowed;
 		}
 		.date-window-separator {
 			font-size: 12px; color: rgba(255,255,255,0.85);
@@ -558,6 +741,15 @@
 			background: #e2e8f0; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; color: #334155;
 		}
 		.load-more-btn:hover { background: #cbd5e1; }
+
+		@media (max-width: 980px) {
+			#triage-board-toolbar {
+				flex-direction: column; align-items: stretch;
+			}
+			#triage-column-tabs.visible {
+				justify-content: flex-start;
+			}
+		}
 
 		.time-label-tooltip {
 			background: rgba(255,255,255,0.78); border: 1px solid rgba(148,163,184,0.45); border-radius: 5px;
@@ -615,29 +807,55 @@
 				</div>
 				<select id="batch-select"></select>
 				<div class="status" id="batch-status">批次：未加载</div>
+				<div id="reviewer-badge-row">
+					<div class="reviewer-chip" title="当前标注者">
+						<span>标注者</span>
+						<span id="current-reviewer-chip" class="reviewer-chip-text">未设置</span>
+					</div>
+					<button id="reviewer-open-session-btn" class="reviewer-switch-btn" type="button">修改</button>
+				</div>
 			</div>
-			<input type="text" id="search-box" placeholder="搜索 UID / reviewer / notes..." />
-			<div id="filter-panel">
-				<div class="filter-title" id="filter-panel-title">按状态筛选 UID（来源: fmm/line/od）</div>
-				<div class="filter-row" id="status-filter-row">
-					<label><input type="checkbox" value="road">road</label>
-					<label><input type="checkbox" value="subway">subway</label>
-					<label><input type="checkbox" value="railway">railway</label>
-					<label><input type="checkbox" value="unmatch">unmatch</label>
-					<label><input type="checkbox" value="stay">stay</label>
+			<input type="text" id="search-box" placeholder="搜索 UID / 当前 notes / 状态..." />
+			<div id="filter-panel" class="collapsed">
+				<div class="sidebar-section-head">
+					<div class="sidebar-section-title-wrap">
+						<div class="sidebar-section-title" id="filter-panel-title">按状态筛选 UID（来源: fmm/line/od）</div>
+						<div id="filter-summary" class="sidebar-section-summary">状态筛选：未启用</div>
+					</div>
+					<button id="filter-toggle-btn" class="sidebar-section-toggle" type="button">展开</button>
 				</div>
-				<div class="filter-row">
-					<label>模式</label>
-					<select id="filter-mode">
-						<option value="any">任一命中</option>
-						<option value="all">全部命中</option>
-					</select>
+				<div id="filter-panel-body">
+					<div class="filter-row" id="status-filter-row">
+						<label><input type="checkbox" value="road">road</label>
+						<label><input type="checkbox" value="subway">subway</label>
+						<label><input type="checkbox" value="railway">railway</label>
+						<label><input type="checkbox" value="unmatch">unmatch</label>
+						<label><input type="checkbox" value="stay">stay</label>
+					</div>
+					<div class="filter-row">
+						<label>模式</label>
+						<select id="filter-mode">
+							<option value="any">任一命中</option>
+							<option value="all">全部命中</option>
+						</select>
+					</div>
+					<div class="status" id="filter-status">状态筛选：未启用</div>
 				</div>
-				<div class="status" id="filter-status">状态筛选：未启用</div>
 			</div>
 			<div id="review-panel">
-				<h4>整轨审核</h4>
-				<div id="review-current">请选择 UID 后保存 `accept / reject / skip`。</div>
+				<div id="review-panel-head">
+					<div id="review-title-wrap">
+						<h4>整轨审核</h4>
+						<div id="review-current">请选择 UID 后保存 `accept / reject / skip`。</div>
+					</div>
+				</div>
+				<div class="review-identity-row">
+					<div class="review-identity-text">
+						<div class="review-identity-label">当前标注者</div>
+						<div id="reviewer-identity-value" class="review-identity-value">未设置</div>
+					</div>
+					<button id="reviewer-switch-btn" class="reviewer-switch-btn" type="button">切换</button>
+				</div>
 				<div class="review-nav">
 					<button id="prev-pending-btn" type="button">上一条待审</button>
 					<button id="next-pending-btn" type="button">下一条待审</button>
@@ -647,7 +865,6 @@
 					<button type="button" class="review-decision-btn" data-decision="reject">reject</button>
 					<button type="button" class="review-decision-btn" data-decision="skip">skip</button>
 				</div>
-				<input id="reviewer-input" class="review-input" type="text" placeholder="reviewer（可选）" />
 				<input id="reference-source-input" class="review-input" type="text" placeholder="reference_source，例如 line.csv / fmm.csv" />
 				<textarea id="review-notes" placeholder="notes（整轨审核备注，可留空）"></textarea>
 				<div class="review-actions">
@@ -655,10 +872,25 @@
 					<button id="refresh-review-btn" type="button">刷新当前</button>
 				</div>
 				<div class="review-meta" id="review-meta">当前 decision：未设置</div>
+				<div id="review-aggregate-panel" class="collapsed">
+					<button id="review-aggregate-toggle" class="review-aggregate-header" type="button">
+						<span>多人标注汇总</span>
+						<span id="review-aggregate-toggle-text" class="review-aggregate-toggle-text">展开</span>
+					</button>
+					<div id="review-aggregate-summary" class="review-aggregate-summary">当前 UID 暂无多人摘要</div>
+					<div id="review-aggregate-list" class="review-aggregate-list"></div>
+				</div>
 				<div class="status" id="review-dirty-status">当前内容已保存</div>
 				<div class="status" id="review-status">审核接口：未连接</div>
 			</div>
 			<div id="triage-board-wrap">
+				<div id="triage-board-toolbar">
+					<div id="triage-board-toolbar-left">
+						<div class="triage-board-label">轨迹队列</div>
+						<div id="triage-board-summary" class="triage-board-summary">暂无轨迹</div>
+					</div>
+					<div id="triage-column-tabs"></div>
+				</div>
 				<div id="triage-board"></div>
 			</div>
 				</div>
@@ -696,12 +928,20 @@
 					</div>
 				</div>
 			</div>
-			<div id="date-window-control" class="hidden" title="点击左/右日期后，可用滚轮调整窗口；范围自动限制在当前轨迹日期内">
+			<div id="date-window-control" class="hidden" title="点击起始/结束日期后，可用滚轮或 +/- 按钮调整窗口；范围自动限制在当前轨迹日期内">
 				<div id="date-window-inner">
-					<button id="date-window-start" class="date-window-edge" type="button">----</button>
+					<div class="date-window-group" data-edge="start">
+						<button id="date-window-start-decrease" class="date-window-nudge" type="button" title="起始日期前移一天">-</button>
+						<button id="date-window-start" class="date-window-edge" type="button">----</button>
+						<button id="date-window-start-increase" class="date-window-nudge" type="button" title="起始日期后移一天">+</button>
+					</div>
 					<span class="date-window-separator">--</span>
-					<button id="date-window-end" class="date-window-edge" type="button">----</button>
-					<span id="date-window-hint">滚轮调日期</span>
+					<div class="date-window-group" data-edge="end">
+						<button id="date-window-end-decrease" class="date-window-nudge" type="button" title="结束日期前移一天">-</button>
+						<button id="date-window-end" class="date-window-edge" type="button">----</button>
+						<button id="date-window-end-increase" class="date-window-nudge" type="button" title="结束日期后移一天">+</button>
+					</div>
+					<span id="date-window-hint">滚轮 / +/- 调日期</span>
 				</div>
 			</div>
 			<div id="floating-tools-stack">
@@ -722,7 +962,7 @@
 						<li><strong>时间标签常显</strong>：右下角图层面板现在支持按图层开启“标签常显”，勾选后无需点击，直接在地图上展示该图层的时间/停留信息</li>
 						<li><strong>时间轴增强</strong>：滚轮可低敏缩放时间范围；全时间条支持拖动窗口、拖拽边缘改范围；在时间轴上右键可给当前时间点打单点标签或启动段落标记</li>
 						<li><strong>三列审阅箱</strong>：左侧按“待审 / 已通过 / 未通过或跳过”分栏展示 UID，点击任意卡片即可切换轨迹并加载 latest review</li>
-						<li><strong>筛选</strong>：搜索框同时匹配 UID、latest reviewer、latest notes；状态筛选支持 road/subway/railway/unmatch/stay 的任一命中或全部命中</li>
+						<li><strong>筛选</strong>：搜索框同时匹配 UID、当前标注者 notes 和状态词；状态筛选支持 road/subway/railway/unmatch/stay 的任一命中或全部命中</li>
 						<li><strong>编辑与流转</strong>：已审 UID 再次打开后可直接修改并保存；保存后默认跳到当前筛选结果中的下一条待审 UID</li>
 						<li><strong>图层/样式</strong>：地图右下角提供折叠式浮动面板</li>
 					</ul>
@@ -817,6 +1057,19 @@
 			</div>
 		</div>
 	</div>
+	<div id="reviewer-session-overlay" aria-hidden="true">
+		<div id="reviewer-session-modal" role="dialog" aria-modal="true" aria-labelledby="reviewer-session-title">
+			<div id="reviewer-session-title">进入标注</div>
+			<div id="reviewer-session-subtitle">输入姓名或昵称，作为当前批次中的标注来源。这里是轻量身份，不是权限鉴权。</div>
+			<input id="reviewer-session-input" type="text" placeholder="例如 Ocean / 同学A" />
+			<div id="reviewer-session-known"></div>
+			<div id="reviewer-session-status" class="status"></div>
+			<div id="reviewer-session-actions">
+				<button id="reviewer-session-cancel" type="button">取消</button>
+				<button id="reviewer-session-submit" type="button">进入标注</button>
+			</div>
+		</div>
+	</div>
 
 	<script>
 		function outOfChina(lon, lat) {
@@ -863,7 +1116,7 @@
 		const CHAIN2_UI_PRESET = {
 			mode: "chain2",
 			title: "信令轨迹演示与调试预览",
-			searchPlaceholder: "搜索 UID / reviewer / notes...",
+			searchPlaceholder: "搜索 UID / 当前 notes / 状态...",
 			filterTitle: "按状态筛选 UID（来源: fmm/line/od）",
 			filterStateOptions: ["road", "subway", "railway", "unmatch", "stay"],
 			pointStatusTypes: ["road", "subway", "railway", "unmatch", "stay"],
@@ -893,8 +1146,8 @@
 					<li>点击地图上的点可查看该点的<strong>状态</strong>和<strong>时间</strong></li>
 					<li><strong>时间标签常显</strong>：右下角图层面板现在支持按图层开启“标签常显”，勾选后无需点击，直接在地图上展示该图层的时间/停留信息</li>
 					<li><strong>标签标注</strong>：时间轴右键支持“打单点标签”和“开始段落标记”；段落标记会以当前点为起点，跟随鼠标预览，到下一次点击时落成一个带颜色的时间段</li>
-					<li><strong>三列审阅箱</strong>：左侧按“待审 / 已通过 / 未通过或跳过”分栏展示 UID，点击任意卡片即可切换轨迹并加载 latest review</li>
-					<li><strong>筛选</strong>：搜索框同时匹配 UID、latest reviewer、latest notes；状态筛选支持 road/subway/railway/unmatch/stay 的任一命中或全部命中</li>
+					<li><strong>三列审阅箱</strong>：左侧按当前标注者的“待审 / 已通过 / 未通过或跳过”分栏展示 UID，点击任意卡片即可切换轨迹并加载当前标注者的 latest review</li>
+					<li><strong>筛选</strong>：搜索框同时匹配 UID、当前标注者 notes 和状态词；状态筛选支持 road/subway/railway/unmatch/stay 的任一命中或全部命中</li>
 					<li><strong>编辑与流转</strong>：已审 UID 再次打开后可直接修改并保存；保存后默认跳到当前筛选结果中的下一条待审 UID</li>
 					<li><strong>时间轴</strong>：日期区间条上方新增拖动式时间轴；拖动后会在地图上用气泡高亮当前时间点，左右按钮可平移当前时间轴窗口，滚轮和右上角缩放键可低敏调整时间范围</li>
 					<li><strong>标注设置</strong>：右上角“标注设置”可自定义段落类别、颜色和顺序，并调节时间轴的聚焦/未聚焦透明度</li>
@@ -921,7 +1174,7 @@
 		const SIM_SIGNAL_UI_PRESET = {
 			mode: "sim_signal",
 			title: "模拟信令轨迹演示与调试预览",
-			searchPlaceholder: "搜索 UID...",
+			searchPlaceholder: "搜索 UID / 当前 notes / 状态...",
 			filterTitle: "按状态筛选 UID（来源: GPS 状态 + 模拟切换特征）",
 			filterStateOptions: ["stay", "walking", "bicycling", "driving", "ping_pong", "long_jump"],
 			pointStatusTypes: ["stay", "walking", "bicycling", "driving"],
@@ -974,6 +1227,7 @@
 		const INITIAL_BATCH_NAME = QUERY.get("batch") || "";
 		const CACHE_MAX = 24;
 		const BOARD_PAGE_SIZE = 60;
+		const TRIAGE_STACK_WIDTH_THRESHOLD = 430;
 		const MAX_BUCKET_DETAIL_ROWS = 12;
 		const TIME_SCRUBBER_MAX_POINTS = 500;
 		const TIME_SCRUBBER_MIN_VISIBLE_POINTS = 8;
@@ -981,7 +1235,7 @@
 		const TIME_SCRUBBER_ZOOM_STEP = 0.14;
 		const TIME_SCRUBBER_OVERVIEW_EDGE_PAD = 10;
 		const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-		const REVIEWER_STORAGE_KEY = "cellularQualityReviewer";
+		const REVIEWER_SESSION_STORAGE_KEY = "trajectoryReviewerSessionV1";
 		const ANNOTATION_SETTINGS_STORAGE_KEY = "trajectoryAnnotationSettingsV2";
 		const TIMELINE_PINS_STORAGE_KEY = "trajectoryTimelinePinsV2";
 		const TIMELINE_SEGMENTS_STORAGE_KEY = "trajectoryTimelineSegmentsV2";
@@ -1013,6 +1267,10 @@
 		let precomputedStates = null;
 		let reviewIndex = { reviews: {}, counts: {} };
 		let reviewApiAvailable = false;
+		let reviewerRegistry = [];
+		let currentReviewerSession = loadReviewerSession();
+		let reviewerSessionModalRequired = false;
+		let currentUidAggregate = null;
 		let batchList = [];
 		let currentBatchName = "";
 		let currentBatchMeta = null;
@@ -1028,6 +1286,11 @@
 		let filterRunToken = 0;
 		let boardState = null;
 		let columnVisibleCounts = { pending: BOARD_PAGE_SIZE, accept: BOARD_PAGE_SIZE, other: BOARD_PAGE_SIZE };
+		let filterPanelCollapsed = true;
+		let triageLayoutMode = "grid";
+		let activeTriageColumnKey = triageColumns[0]?.key || "";
+		let reviewAggregateCollapsed = true;
+		let reviewAggregateCollapseTouched = false;
 		let mapToolsOpen = false;
 		let renderedCache = new Map();
 		let renderedCacheKeys = [];
@@ -1098,6 +1361,181 @@
 			return `${url.pathname}${url.search}`;
 		}
 
+		function loadReviewerSession() {
+			try {
+				const raw = localStorage.getItem(REVIEWER_SESSION_STORAGE_KEY);
+				if (!raw) return null;
+				const parsed = JSON.parse(raw);
+				if (!parsed || typeof parsed !== "object") return null;
+				const reviewerId = String(parsed.reviewer_id || "").trim();
+				const reviewerName = String(parsed.reviewer_name || parsed.display_name || "").trim();
+				if (!reviewerId || !reviewerName) return null;
+				return {
+					reviewer_id: reviewerId,
+					reviewer_name: reviewerName,
+					display_name: reviewerName,
+					last_selected_at: String(parsed.last_selected_at || "").trim(),
+				};
+			} catch (_) {
+				return null;
+			}
+		}
+
+		function persistReviewerSession(session) {
+			currentReviewerSession = session ? {
+				reviewer_id: String(session.reviewer_id || "").trim(),
+				reviewer_name: String(session.reviewer_name || session.display_name || "").trim(),
+				display_name: String(session.reviewer_name || session.display_name || "").trim(),
+				last_selected_at: new Date().toISOString(),
+			} : null;
+			try {
+				if (!currentReviewerSession) localStorage.removeItem(REVIEWER_SESSION_STORAGE_KEY);
+				else localStorage.setItem(REVIEWER_SESSION_STORAGE_KEY, JSON.stringify(currentReviewerSession));
+			} catch (_) {}
+			renderReviewerIdentity();
+		}
+
+		function getCurrentReviewerId() {
+			return String(currentReviewerSession?.reviewer_id || "").trim();
+		}
+
+		function getCurrentReviewerName() {
+			return String(currentReviewerSession?.reviewer_name || currentReviewerSession?.display_name || "").trim();
+		}
+
+		function buildReviewerScopedParams(extraParams = {}) {
+			return {
+				...extraParams,
+				reviewer_id: getCurrentReviewerId(),
+			};
+		}
+
+		function setReviewerSessionStatus(message, isError = false) {
+			const el = document.getElementById("reviewer-session-status");
+			el.textContent = message;
+			el.style.color = isError ? "#c62828" : "#64748b";
+		}
+
+		function renderReviewerIdentity() {
+			const name = getCurrentReviewerName() || "未设置";
+			document.getElementById("current-reviewer-chip").textContent = name;
+			document.getElementById("reviewer-identity-value").textContent = name;
+			document.getElementById("save-review-btn").disabled = !getCurrentReviewerId();
+			document.getElementById("refresh-review-btn").disabled = !currentUid;
+		}
+
+		function renderKnownReviewerButtons() {
+			const container = document.getElementById("reviewer-session-known");
+			if (!container) return;
+			const buttons = reviewerRegistry.map(reviewer => `
+				<button
+					type="button"
+					class="reviewer-known-btn"
+					data-reviewer-id="${escapeHtml(reviewer.reviewer_id || "")}"
+					data-reviewer-name="${escapeHtml(reviewer.reviewer_name || reviewer.display_name || "")}"
+				>${escapeHtml(reviewer.reviewer_name || reviewer.display_name || reviewer.reviewer_id || "")}</button>
+			`).join("");
+			container.innerHTML = buttons;
+		}
+
+		function openReviewerSessionModal(options = {}) {
+			const overlay = document.getElementById("reviewer-session-overlay");
+			const input = document.getElementById("reviewer-session-input");
+			reviewerSessionModalRequired = options.required !== false;
+			overlay.classList.add("open");
+			overlay.setAttribute("aria-hidden", "false");
+			document.getElementById("reviewer-session-cancel").style.display =
+				reviewerSessionModalRequired ? "none" : "";
+			input.value = options.prefillName || getCurrentReviewerName() || "";
+			setReviewerSessionStatus(reviewerSessionModalRequired ? "请先设置当前标注者身份。" : "可以切换到其他标注者。", false);
+			renderKnownReviewerButtons();
+			window.setTimeout(() => input.focus(), 0);
+		}
+
+		function closeReviewerSessionModal(force = false) {
+			if (reviewerSessionModalRequired && !force) return;
+			const overlay = document.getElementById("reviewer-session-overlay");
+			overlay.classList.remove("open");
+			overlay.setAttribute("aria-hidden", "true");
+			setReviewerSessionStatus("", false);
+		}
+
+		async function loadReviewerRegistry() {
+			if (currentUiConfig.hideReviewPanel) {
+				reviewerRegistry = [];
+				renderKnownReviewerButtons();
+				return [];
+			}
+			try {
+				const response = await fetch(buildReviewApiUrl("/reviewers"));
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				const payload = await response.json();
+				reviewerRegistry = Array.isArray(payload.reviewers) ? payload.reviewers : [];
+			} catch (_) {
+				reviewerRegistry = [];
+			}
+			renderKnownReviewerButtons();
+			return reviewerRegistry;
+		}
+
+		async function submitReviewerSession(payload = {}) {
+			const displayName = String(payload.display_name || "").trim();
+			const reviewerId = String(payload.reviewer_id || "").trim();
+			const body = {};
+			if (displayName) body.display_name = displayName;
+			if (reviewerId) body.reviewer_id = reviewerId;
+			const response = await fetch(buildReviewApiUrl("/reviewers/session"), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			});
+			if (!response.ok) {
+				const text = await response.text();
+				throw new Error(text || `HTTP ${response.status}`);
+			}
+			const sessionPayload = await response.json();
+			const reviewer = sessionPayload.reviewer || null;
+			if (!reviewer?.reviewer_id || !reviewer?.reviewer_name) {
+				throw new Error("reviewer session response is incomplete");
+			}
+			persistReviewerSession(reviewer);
+			await loadReviewerRegistry();
+			return reviewer;
+		}
+
+		async function ensureReviewerSessionReady(options = {}) {
+			if (currentUiConfig.hideReviewPanel) return true;
+			await loadReviewerRegistry();
+			if (!currentReviewerSession) {
+				if (options.prompt !== false) openReviewerSessionModal({ required: true });
+				return false;
+			}
+			try {
+				await submitReviewerSession({
+					reviewer_id: currentReviewerSession.reviewer_id,
+					display_name: currentReviewerSession.reviewer_name,
+				});
+				return true;
+			} catch (error) {
+				setReviewStatus(`标注者身份校验失败：${error.message || error}`, true);
+				if (options.prompt !== false) openReviewerSessionModal({ required: true });
+				return false;
+			}
+		}
+
+		async function onReviewerSessionChanged() {
+			renderReviewerIdentity();
+			await loadReviewIndex();
+			if (currentUid) {
+				const meta = await ensureUidMeta(currentUid);
+				await loadReviewForUid(currentUid, meta.exists);
+				await loadTimelineAnnotationsForUid(currentUid);
+				renderTimeScrubberControl();
+			} else {
+				renderTriageBoard({ resetVisibleCounts: false });
+			}
+		}
+
 		function getUiPresetForMode(mode) {
 			return mode === "sim_signal" ? SIM_SIGNAL_UI_PRESET : CHAIN2_UI_PRESET;
 		}
@@ -1128,6 +1566,64 @@
 			document.getElementById("search-box").placeholder = currentUiConfig.searchPlaceholder || "搜索 UID...";
 			document.getElementById("review-panel").style.display = currentUiConfig.hideReviewPanel ? "none" : "";
 			renderHelpContent();
+			renderFilterPanelChrome();
+			syncReviewAggregateChrome(currentUidAggregate);
+		}
+
+		function getSelectedFilterStates() {
+			return [...document.querySelectorAll("#status-filter-row input:checked")].map(el => el.value);
+		}
+
+		function buildFilterSummaryText() {
+			const selectedStates = getSelectedFilterStates();
+			const mode = document.getElementById("filter-mode")?.value || "any";
+			const searchTerm = document.getElementById("search-box")?.value.trim();
+			const parts = [];
+			parts.push(
+				selectedStates.length
+					? `状态: ${mode === "all" ? "全部" : "任一"} ${selectedStates.join("/")}`
+					: "状态: 全部"
+			);
+			if (searchTerm) parts.push(`搜索: ${searchTerm}`);
+			if (uidList.length) parts.push(`${filteredUidList.length} / ${uidList.length}`);
+			return parts.join(" | ");
+		}
+
+		function renderFilterPanelChrome() {
+			const panel = document.getElementById("filter-panel");
+			const toggle = document.getElementById("filter-toggle-btn");
+			const summary = document.getElementById("filter-summary");
+			if (!panel || !toggle || !summary) return;
+			panel.classList.toggle("collapsed", filterPanelCollapsed);
+			toggle.textContent = filterPanelCollapsed ? "展开" : "收起";
+			summary.textContent = buildFilterSummaryText();
+		}
+
+		function setFilterPanelCollapsed(nextCollapsed) {
+			filterPanelCollapsed = !!nextCollapsed;
+			renderFilterPanelChrome();
+		}
+
+		function setReviewAggregateCollapsed(nextCollapsed, options = {}) {
+			reviewAggregateCollapsed = !!nextCollapsed;
+			if (options.userInitiated) reviewAggregateCollapseTouched = true;
+			const panel = document.getElementById("review-aggregate-panel");
+			const toggleText = document.getElementById("review-aggregate-toggle-text");
+			if (panel) panel.classList.toggle("collapsed", reviewAggregateCollapsed);
+			if (toggleText) toggleText.textContent = reviewAggregateCollapsed ? "展开" : "收起";
+		}
+
+		function syncReviewAggregateChrome(aggregate = null) {
+			const reviewerCount = Number(aggregate?.reviewer_count || 0);
+			if (!reviewAggregateCollapseTouched) {
+				setReviewAggregateCollapsed(reviewerCount <= 1, { userInitiated: false });
+				return;
+			}
+			if (!aggregate || reviewerCount <= 0) {
+				setReviewAggregateCollapsed(true, { userInitiated: false });
+				return;
+			}
+			setReviewAggregateCollapsed(reviewAggregateCollapsed, { userInitiated: false });
 		}
 
 		function applyAnnotationUiSettings() {
@@ -1296,6 +1792,7 @@
 			layerLabels = deepClone(currentUiConfig.layerLabels);
 			layerConfig = deepClone(currentUiConfig.layerConfig);
 			triageColumns = deepClone(currentUiConfig.triageColumns);
+			activeTriageColumnKey = triageColumns[0]?.key || "";
 			statusPointStyles = deepClone(currentUiConfig.pointStatusStyles);
 			initDefaultStyles();
 			renderStatusFilterOptions();
@@ -1370,11 +1867,13 @@
 			currentRawDataByLayer = {};
 			currentFilteredDataByLayer = {};
 			currentExistsByLayer = {};
-			reviewIndex = { reviews: {}, counts: {} };
+			reviewIndex = { reviews: {}, counts: {}, aggregate_counts_by_uid: {} };
+			currentUidAggregate = null;
 			uidList = [];
 			filteredUidList = [];
 			currentUid = null;
 			otherReviewFilterValue = "all";
+			activeTriageColumnKey = triageColumns[0]?.key || "";
 			resetCurrentTimeWindow();
 			resetTimeScrubber();
 			clearRenderedCache();
@@ -1385,10 +1884,12 @@
 		function resetBatchViewState() {
 			clearActiveGroup();
 			currentUid = null;
+			currentUidAggregate = null;
 			resetCurrentTimeWindow();
 			resetTimeScrubber();
 			document.getElementById("layer-status").textContent = "请选择 UID";
 			populateReviewForm("", {}, null);
+			renderReviewAggregatePanel(null);
 			renderLayerControls({});
 			renderStatusStyleControls();
 		}
@@ -1463,7 +1964,7 @@
 		function getCurrentFormState() {
 			return {
 				decision: selectedDecision || "",
-				reviewer: document.getElementById("reviewer-input").value.trim(),
+				reviewer_id: getCurrentReviewerId(),
 				reference_source: document.getElementById("reference-source-input").value.trim(),
 				notes: document.getElementById("review-notes").value.trim()
 			};
@@ -1533,37 +2034,101 @@
 			}
 			const review = getReviewForUid(uid);
 			if (!review) return `<div class="triage-card-meta">未审核</div>`;
-			const reviewer = review.reviewer ? `reviewer: ${escapeHtml(review.reviewer)}` : "reviewer: -";
 			const timestamp = formatReviewTimestamp(review.timestamp) || "-";
+			const reviewerName = review.reviewer_name || review.reviewer || review.reviewer_id || "";
+			const reviewerCount = Number(reviewIndex?.aggregate_counts_by_uid?.[uid] || 0);
+			const summary = [timestamp, reviewerName].filter(Boolean).join(" | ");
 			const notes = review.notes ? `<div class="triage-card-note">${escapeHtml(review.notes)}</div>` : "";
 			return `
-				<div class="triage-card-meta">${reviewer}</div>
-				<div class="triage-card-meta">${escapeHtml(timestamp)}</div>
+				<div class="triage-card-meta">${escapeHtml(summary || timestamp)}${reviewerCount > 1 ? ` | ${reviewerCount} reviewers` : ""}</div>
 				${notes}
 			`;
+		}
+
+		function renderReviewAggregatePanel(aggregate = null) {
+			const summaryEl = document.getElementById("review-aggregate-summary");
+			const listEl = document.getElementById("review-aggregate-list");
+			currentUidAggregate = aggregate || null;
+			if (!aggregate || !Array.isArray(aggregate.latest_reviews)) {
+				summaryEl.textContent = currentUid ? "当前 UID 暂无多人摘要" : "选择 UID 后显示多人摘要";
+				listEl.innerHTML = `<div class="review-aggregate-empty">暂无数据</div>`;
+				syncReviewAggregateChrome(null);
+				return;
+			}
+			const latestReviews = aggregate.latest_reviews || [];
+			const decisionCounts = aggregate.decision_counts || {};
+			const reviewerCount = Number(aggregate.reviewer_count || latestReviews.length || 0);
+			summaryEl.textContent = reviewerCount
+				? `已参与 reviewer ${reviewerCount} 人 | accept ${decisionCounts.accept || 0} / reject ${decisionCounts.reject || 0} / skip ${decisionCounts.skip || 0}`
+				: "当前 UID 暂无多人摘要";
+			if (!latestReviews.length) {
+				listEl.innerHTML = `<div class="review-aggregate-empty">暂无 reviewer 审核记录</div>`;
+				syncReviewAggregateChrome(aggregate);
+				return;
+			}
+			const timelineByReviewer = Object.fromEntries(
+				(aggregate.timeline_annotation_summary || []).map(item => [item.reviewer_id, item])
+			);
+			listEl.innerHTML = latestReviews.map(item => {
+				const timeline = timelineByReviewer[item.reviewer_id] || {};
+				const timelineText = (timeline.pin_count || timeline.segment_count)
+					? ` | pin ${timeline.pin_count || 0} / segment ${timeline.segment_count || 0}`
+					: "";
+				const referenceText = item.reference_source ? ` | ${item.reference_source}` : "";
+				const notes = item.notes ? `<div class="review-aggregate-note">${escapeHtml(item.notes)}</div>` : "";
+				return `
+					<div class="review-aggregate-item">
+						<div class="review-aggregate-item-top">
+							<div class="review-aggregate-name">${escapeHtml(item.reviewer_name || item.reviewer || item.reviewer_id || "-")}</div>
+							<div>${getReviewBadgeHtml(item)}</div>
+						</div>
+						<div class="review-aggregate-meta">${escapeHtml(formatReviewTimestamp(item.timestamp) || "-")}${escapeHtml(referenceText)}${escapeHtml(timelineText)}</div>
+						${notes}
+					</div>
+				`;
+			}).join("");
+			syncReviewAggregateChrome(aggregate);
+		}
+
+		async function loadReviewAggregateForUid(uid) {
+			if (!uid || currentUiConfig.hideReviewPanel || !reviewApiAvailable) {
+				renderReviewAggregatePanel(null);
+				return;
+			}
+			try {
+				const response = await fetch(buildReviewApiUrl("/reviews/aggregate", { uid }));
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				const payload = await response.json();
+				if (!reviewIndex.aggregate_counts_by_uid) reviewIndex.aggregate_counts_by_uid = {};
+				reviewIndex.aggregate_counts_by_uid[uid] = Number(payload.aggregate?.reviewer_count || 0);
+				renderReviewAggregatePanel(payload.aggregate || null);
+			} catch (_) {
+				renderReviewAggregatePanel(null);
+			}
 		}
 
 		function updateReviewMeta(review, fallbackReferenceSource) {
 			const meta = document.getElementById("review-meta");
 			const uidText = currentUid ? `UID：${currentUid}` : "UID：未选择";
+			const reviewerName = getCurrentReviewerName() || "-";
+			const aggregateText = currentUidAggregate?.reviewer_count
+				? ` | 多人 ${currentUidAggregate.reviewer_count}`
+				: "";
 			if (!review) {
-				meta.textContent = `${uidText} | latest decision：未设置 | reviewer：- | timestamp：- | reference_source：${fallbackReferenceSource || "未设置"}`;
+				meta.textContent = `${uidText} | 当前标注者：${reviewerName} | latest decision：未设置 | timestamp：- | reference_source：${fallbackReferenceSource || "未设置"}${aggregateText}`;
 				return;
 			}
-			const reviewer = review.reviewer || "-";
 			const timestamp = formatReviewTimestamp(review.timestamp) || "-";
 			const ref = review.reference_source || fallbackReferenceSource || "未设置";
-			meta.textContent = `${uidText} | latest decision：${review.decision || "未设置"} | reviewer：${reviewer} | timestamp：${timestamp} | reference_source：${ref}`;
+			meta.textContent = `${uidText} | 当前标注者：${reviewerName} | latest decision：${review.decision || "未设置"} | timestamp：${timestamp} | reference_source：${ref}${aggregateText}`;
 		}
 
 		function populateReviewForm(uid, exists, review) {
 			const preferredReferenceSource = review?.reference_source || getPreferredReferenceSource(exists);
-			const reviewerValue = review?.reviewer || localStorage.getItem(REVIEWER_STORAGE_KEY) || "";
 			document.getElementById("review-current").textContent = uid ? `当前 UID：${uid}` : "请选择 UID 后保存 `accept / reject / skip`。";
-			document.getElementById("reviewer-input").value = reviewerValue;
+			document.getElementById("reviewer-identity-value").textContent = getCurrentReviewerName() || "未设置";
 			document.getElementById("reference-source-input").value = preferredReferenceSource || "";
 			document.getElementById("review-notes").value = review?.notes || "";
-			if (reviewerValue) localStorage.setItem(REVIEWER_STORAGE_KEY, reviewerValue);
 			setDecisionButtons(review?.decision || "", { silent: true });
 			updateReviewMeta(review, preferredReferenceSource);
 			markReviewPristine();
@@ -1575,15 +2140,23 @@
 				reviewIndex = { reviews: {}, counts: {} };
 				return;
 			}
+			const reviewerReady = await ensureReviewerSessionReady({ prompt: true });
+			if (!reviewerReady) {
+				reviewApiAvailable = false;
+				reviewIndex = { reviews: {}, counts: {}, aggregate_counts_by_uid: {} };
+				setReviewStatus("请先设置标注者身份", true);
+				if (uidList.length) await refreshFilteredUids({ resetVisibleCounts: false });
+				return;
+			}
 			try {
-				const response = await fetch(buildReviewApiUrl("/reviews"));
+				const response = await fetch(buildReviewApiUrl("/reviews", buildReviewerScopedParams()));
 				if (!response.ok) throw new Error(`HTTP ${response.status}`);
 				reviewIndex = await response.json();
 				reviewApiAvailable = true;
-				setReviewStatus("审核接口：已连接", false);
+				setReviewStatus(`审核接口：已连接 | 当前 reviewer ${getCurrentReviewerName()}`, false);
 			} catch (_) {
 				reviewApiAvailable = false;
-				reviewIndex = { reviews: {}, counts: {} };
+				reviewIndex = { reviews: {}, counts: {}, aggregate_counts_by_uid: {} };
 				setReviewStatus("审核接口：未连接（请使用 review_server.py）", true);
 			}
 			if (uidList.length) await refreshFilteredUids({ resetVisibleCounts: false });
@@ -1597,19 +2170,22 @@
 			}
 			if (!reviewApiAvailable) {
 				populateReviewForm(uid, exists, getReviewForUid(uid));
+				await loadReviewAggregateForUid(uid);
 				return;
 			}
 			try {
-				const response = await fetch(buildReviewApiUrl("/reviews", { uid }));
+				const response = await fetch(buildReviewApiUrl("/reviews", buildReviewerScopedParams({ uid })));
 				if (!response.ok) throw new Error(`HTTP ${response.status}`);
 				const payload = await response.json();
 				const review = payload.review || null;
 				if (review) reviewIndex.reviews[uid] = review;
 				else delete reviewIndex.reviews[uid];
+				await loadReviewAggregateForUid(uid);
 				populateReviewForm(uid, exists, review);
 				renderTriageBoard({ resetVisibleCounts: false });
 			} catch (_) {
 				populateReviewForm(uid, exists, getReviewForUid(uid));
+				await loadReviewAggregateForUid(uid);
 				setReviewStatus("审核接口：读取失败", true);
 			}
 		}
@@ -1623,10 +2199,13 @@
 				setReviewStatus("请先选择 accept / reject / skip", true);
 				return;
 			}
-			const reviewer = document.getElementById("reviewer-input").value.trim();
+			if (!getCurrentReviewerId()) {
+				openReviewerSessionModal({ required: true });
+				setReviewStatus("请先设置标注者身份", true);
+				return;
+			}
 			const notes = document.getElementById("review-notes").value.trim();
 			const referenceSource = document.getElementById("reference-source-input").value.trim();
-			if (reviewer) localStorage.setItem(REVIEWER_STORAGE_KEY, reviewer);
 			if (!reviewApiAvailable) {
 				setReviewStatus("审核接口：未连接，无法保存", true);
 				return;
@@ -1640,7 +2219,8 @@
 						uid: savedUid,
 						sample_id: savedUid,
 						decision: selectedDecision,
-						reviewer,
+						reviewer_id: getCurrentReviewerId(),
+						reviewer_name: getCurrentReviewerName(),
 						notes,
 						reference_source: referenceSource
 					})
@@ -1652,6 +2232,7 @@
 				const payload = await response.json();
 				const review = payload.review || null;
 				if (review) reviewIndex.reviews[savedUid] = review;
+				await loadReviewAggregateForUid(savedUid);
 				const meta = await ensureUidMeta(savedUid);
 				populateReviewForm(savedUid, meta.exists, review);
 				await refreshFilteredUids({ resetVisibleCounts: false });
@@ -1736,24 +2317,36 @@
 			return [...new Set(days)];
 		}
 
-		function inferRowTimeBounds(row) {
+		function getRowStartTimeValue(row) {
 			if (!row || typeof row !== "object") return null;
-			const start = [
+			return [
 				row.t_in,
 				row.start_time,
+				row.segment_start_time,
 				row.procedureStart,
 				row.timestamp_ms,
 				row.timestamp,
 				row.time,
 			].map(parseNumericValue).find(value => value != null) ?? null;
-			const end = [
+		}
+
+		function getRowEndTimeValue(row) {
+			if (!row || typeof row !== "object") return null;
+			return [
 				row.t_out,
 				row.end_time,
+				row.segment_end_time,
 				row.procedureEnd,
 				row.timestamp_ms,
 				row.timestamp,
 				row.time,
 			].map(parseNumericValue).find(value => value != null) ?? null;
+		}
+
+		function inferRowTimeBounds(row) {
+			if (!row || typeof row !== "object") return null;
+			const start = getRowStartTimeValue(row);
+			const end = getRowEndTimeValue(row);
 			if (start == null && end == null) return null;
 			const normalizedStart = start != null ? start : end;
 			const normalizedEnd = end != null ? end : start;
@@ -1836,17 +2429,32 @@
 			const control = document.getElementById("date-window-control");
 			const startButton = document.getElementById("date-window-start");
 			const endButton = document.getElementById("date-window-end");
+			const startDecreaseButton = document.getElementById("date-window-start-decrease");
+			const startIncreaseButton = document.getElementById("date-window-start-increase");
+			const endDecreaseButton = document.getElementById("date-window-end-decrease");
+			const endIncreaseButton = document.getElementById("date-window-end-increase");
 			if (!currentTimeWindow.enabled || !currentTimeWindow.availableDays.length) {
 				control.classList.add("hidden");
 				startButton.textContent = "----";
 				endButton.textContent = "----";
+				startDecreaseButton.disabled = true;
+				startIncreaseButton.disabled = true;
+				endDecreaseButton.disabled = true;
+				endIncreaseButton.disabled = true;
 				updateDateWindowEdgeStyles();
 				return;
 			}
 			control.classList.remove("hidden");
 			startButton.textContent = formatDayKeyWithWeekday(currentTimeWindow.startDay || currentTimeWindow.availableDays[0]);
 			endButton.textContent = formatDayKeyWithWeekday(currentTimeWindow.endDay || currentTimeWindow.availableDays[currentTimeWindow.availableDays.length - 1]);
-			control.title = `当前轨迹日期范围 ${currentTimeWindow.availableDays[0]} -- ${currentTimeWindow.availableDays[currentTimeWindow.availableDays.length - 1]}；点击左/右日期后可用滚轮调整`;
+			control.title = `当前轨迹日期范围 ${currentTimeWindow.availableDays[0]} -- ${currentTimeWindow.availableDays[currentTimeWindow.availableDays.length - 1]}；点击起始/结束日期后可用滚轮或 +/- 按钮调整`;
+			const days = currentTimeWindow.availableDays;
+			const startIndex = Math.max(0, days.indexOf(currentTimeWindow.startDay));
+			const endIndex = Math.max(0, days.indexOf(currentTimeWindow.endDay));
+			startDecreaseButton.disabled = startIndex <= 0;
+			startIncreaseButton.disabled = startIndex >= endIndex;
+			endDecreaseButton.disabled = endIndex <= startIndex;
+			endIncreaseButton.disabled = endIndex >= days.length - 1;
 			updateDateWindowEdgeStyles();
 		}
 
@@ -2193,7 +2801,7 @@
 		}
 
 		function getCurrentTimelinePinStoreKey() {
-			return `${currentBatchName || "__default__"}::${currentUid || "__none__"}`;
+			return `${currentBatchName || "__default__"}::${getCurrentReviewerId() || "__no_reviewer__"}::${currentUid || "__none__"}`;
 		}
 
 		function getCurrentTimelinePins() {
@@ -2327,11 +2935,16 @@
 		}
 
 		function buildTimelineAnnotationsApiUrl(extraParams = {}) {
-			return buildReviewApiUrl("/timeline-annotations", extraParams);
+			return buildReviewApiUrl("/timeline-annotations", buildReviewerScopedParams(extraParams));
 		}
 
 		async function loadTimelineAnnotationsForUid(uid) {
 			if (!uid) return;
+			if (!getCurrentReviewerId()) {
+				timelinePinsByTrack[getCurrentTimelinePinStoreKey()] = [];
+				timelineSegmentsByTrack[getCurrentTimelinePinStoreKey()] = [];
+				return;
+			}
 			try {
 				const response = await fetch(buildTimelineAnnotationsApiUrl({ uid }));
 				if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -2346,6 +2959,7 @@
 
 		async function persistCurrentTimelineAnnotationsToServer() {
 			if (!currentUid) return;
+			if (!getCurrentReviewerId()) return;
 			try {
 				await fetch(buildTimelineAnnotationsApiUrl(), {
 					method: "POST",
@@ -2353,6 +2967,8 @@
 					body: JSON.stringify({
 						uid: currentUid,
 						sample_id: currentUid,
+						reviewer_id: getCurrentReviewerId(),
+						reviewer_name: getCurrentReviewerName(),
 						pins: getCurrentTimelinePins(),
 						segments: getCurrentTimelineSegments(),
 					}),
@@ -3159,7 +3775,7 @@
 		}
 
 		function getRowTimeValue(row) {
-			return parseNumericValue(row.t_in ?? row.start_time ?? row.procedureStart ?? row.timestamp_ms);
+			return getRowStartTimeValue(row);
 		}
 
 		function sampleEvenly(items, maxCount) {
@@ -3256,18 +3872,18 @@
 			}
 			if (cfg.kind === "signal") {
 				const cid = getRowStationId(row);
-				return `CID ${cid || "-"} | ${formatTimeWindow(row.procedureStart, row.procedureEnd)}`;
+				return `CID ${cid || "-"} | ${formatTimeWindow(getRowStartTimeValue(row), getRowEndTimeValue(row))}`;
 			}
 			if (cfg.isOD) {
 				const isStay = row.is_stationary === true || String(row.is_stationary).toLowerCase() === "true";
-				return `${isStay ? "stay" : "move"} | ${formatTimeWindow(row.start_time, row.end_time)}`;
+				return `${isStay ? "stay" : "move"} | ${formatTimeWindow(getRowStartTimeValue(row), getRowEndTimeValue(row))}`;
 			}
 			if (layerKey === "raw" || layerKey === "snap") {
 				const cid = getRowStationId(row);
-				return `CID ${cid || "-"} | ${formatTimeWindow(row.t_in, row.t_out)}`;
+				return `CID ${cid || "-"} | ${formatTimeWindow(getRowStartTimeValue(row), getRowEndTimeValue(row))}`;
 			}
 			const matchType = row.match_type ? `${layerKey}:${row.match_type}` : layerKey;
-			return `${matchType} | ${formatTimeWindow(row.t_in ?? row.start_time, row.t_out ?? row.end_time)}`;
+			return `${matchType} | ${formatTimeWindow(getRowStartTimeValue(row), getRowEndTimeValue(row))}`;
 		}
 
 		function buildLayerHeaderText(layerKey, bucket) {
@@ -3391,6 +4007,7 @@
 		}
 
 		document.getElementById("filter-status").textContent = `筛选：未启用 | backend: ${getBackendLabel()}`;
+		renderFilterPanelChrome();
 
 		async function checkLayers(uid) {
 			const layerNames = [...layerOrder];
@@ -3499,6 +4116,8 @@
 			const haystacks = [
 				String(uid || ""),
 				String(review?.reviewer || ""),
+				String(review?.reviewer_name || ""),
+				String(review?.reviewer_id || ""),
 				String(review?.notes || ""),
 				precomputedStateText
 			].map(item => item.toLowerCase());
@@ -3529,6 +4148,71 @@
 
 		function resetColumnVisibleCounts() {
 			columnVisibleCounts = Object.fromEntries(triageColumns.map(column => [column.key, BOARD_PAGE_SIZE]));
+		}
+
+		function getSidebarEffectiveWidth() {
+			const sidebar = document.getElementById("sidebar");
+			if (!sidebar || sidebar.classList.contains("collapsed")) return 0;
+			return Math.round(sidebar.getBoundingClientRect().width || 0);
+		}
+
+		function getTriageLayoutMode() {
+			if (triageColumns.length <= 1) return "stack";
+			return getSidebarEffectiveWidth() < TRIAGE_STACK_WIDTH_THRESHOLD ? "stack" : "grid";
+		}
+
+		function resolveActiveTriageColumnKey() {
+			const validKeys = triageColumns.map(column => column.key);
+			if (!validKeys.length) return "";
+			if (currentUid) {
+				const currentBucketKey = getReviewBucketKey(currentUid);
+				if (
+					validKeys.includes(currentBucketKey)
+					&& (boardState?.filteredBuckets?.[currentBucketKey] || []).includes(currentUid)
+				) {
+					return currentBucketKey;
+				}
+			}
+			if (
+				validKeys.includes(activeTriageColumnKey)
+				&& (boardState?.filteredBuckets?.[activeTriageColumnKey] || []).length
+			) {
+				return activeTriageColumnKey;
+			}
+			return validKeys.find(key => (boardState?.filteredBuckets?.[key] || []).length) || validKeys[0];
+		}
+
+		function renderTriageToolbar() {
+			const summaryEl = document.getElementById("triage-board-summary");
+			if (summaryEl) {
+				summaryEl.textContent = uidList.length
+					? `当前筛选 ${filteredUidList.length} / ${uidList.length}`
+					: "暂无轨迹";
+			}
+			const tabsEl = document.getElementById("triage-column-tabs");
+			if (!tabsEl) return;
+			const useTabs = triageLayoutMode === "stack" && triageColumns.length > 1;
+			tabsEl.classList.toggle("visible", useTabs);
+			if (!useTabs) {
+				tabsEl.innerHTML = "";
+				return;
+			}
+			tabsEl.innerHTML = triageColumns.map(column => {
+				const count = boardState?.filteredBuckets?.[column.key]?.length || 0;
+				return `
+					<button type="button" class="triage-tab ${activeTriageColumnKey === column.key ? "active" : ""}" data-column="${escapeHtml(column.key)}">
+						<span>${escapeHtml(column.title)}</span>
+						<span class="triage-tab-count">${count}</span>
+					</button>
+				`;
+			}).join("");
+		}
+
+		function maybeSyncTriageLayoutMode() {
+			const nextMode = getTriageLayoutMode();
+			if (nextMode === triageLayoutMode) return;
+			triageLayoutMode = nextMode;
+			renderTriageBoard({ resetVisibleCounts: false });
 		}
 
 		function renderTriageColumn(column) {
@@ -3578,7 +4262,16 @@
 		function renderTriageBoard(options = {}) {
 			if (options.resetVisibleCounts) resetColumnVisibleCounts();
 			boardState = computeBoardState();
-			document.getElementById("triage-board").innerHTML = triageColumns.map(renderTriageColumn).join("");
+			triageLayoutMode = getTriageLayoutMode();
+			activeTriageColumnKey = resolveActiveTriageColumnKey();
+			renderTriageToolbar();
+			const boardEl = document.getElementById("triage-board");
+			boardEl.className = triageLayoutMode === "stack" ? "mode-stack" : "mode-grid";
+			const columnsToRender = triageLayoutMode === "stack"
+				? triageColumns.filter(column => column.key === activeTriageColumnKey)
+				: triageColumns;
+			boardEl.innerHTML = columnsToRender.map(renderTriageColumn).join("");
+			renderFilterPanelChrome();
 			updatePendingNavigation();
 		}
 
@@ -3627,12 +4320,13 @@
 		async function refreshFilteredUids(options = {}) {
 			const resetVisibleCounts = options.resetVisibleCounts !== false;
 			const token = ++filterRunToken;
-			const selectedStates = [...document.querySelectorAll("#status-filter-row input:checked")].map(el => el.value);
+			const selectedStates = getSelectedFilterStates();
 			const mode = document.getElementById("filter-mode").value;
 			const searchTerm = document.getElementById("search-box").value.trim().toLowerCase();
 			const usePrecomputed = !!precomputedStates;
 			if (selectedStates.length && !usePrecomputed) {
 				document.getElementById("filter-status").textContent = "筛选：计算中...（无缓存，较慢）";
+				renderFilterPanelChrome();
 			}
 
 			const nextFiltered = [];
@@ -3662,6 +4356,7 @@
 				? "未启用状态筛选"
 				: `${mode === "all" ? "全部命中" : "任一命中"} ${selectedStates.join("/")}`;
 			document.getElementById("filter-status").textContent = `筛选：${filterDesc} | 搜索命中 ${filteredUidList.length} / ${uidList.length} | backend: ${getBackendLabel()}`;
+			renderFilterPanelChrome();
 		}
 
 		function clearActiveGroup() {
@@ -4181,11 +4876,56 @@
 			await loadReviewForUid(currentUid, meta.exists);
 			setReviewStatus(hadDirty ? "已丢弃未保存修改并刷新当前 UID 的最新审核记录" : "已刷新当前 UID 的最新审核记录", false);
 		});
-		document.getElementById("reviewer-input").value = localStorage.getItem(REVIEWER_STORAGE_KEY) || "";
-		document.getElementById("reviewer-input").addEventListener("input", syncReviewDirtyState);
-		document.getElementById("reviewer-input").addEventListener("change", (e) => {
-			localStorage.setItem(REVIEWER_STORAGE_KEY, e.target.value.trim());
-			syncReviewDirtyState();
+		document.getElementById("reviewer-open-session-btn").addEventListener("click", () => {
+			openReviewerSessionModal({ required: false });
+		});
+		document.getElementById("reviewer-switch-btn").addEventListener("click", () => {
+			if (reviewFormDirty && !confirmDiscardReviewChanges()) return;
+			openReviewerSessionModal({ required: false });
+		});
+		document.getElementById("reviewer-session-cancel").addEventListener("click", () => {
+			closeReviewerSessionModal();
+		});
+		document.getElementById("reviewer-session-submit").addEventListener("click", async () => {
+			const displayName = document.getElementById("reviewer-session-input").value.trim();
+			if (!displayName) {
+				setReviewerSessionStatus("请输入姓名或昵称。", true);
+				return;
+			}
+			try {
+				setReviewerSessionStatus("正在进入标注...", false);
+				await submitReviewerSession({ display_name: displayName });
+				reviewerSessionModalRequired = false;
+				closeReviewerSessionModal(true);
+				await onReviewerSessionChanged();
+			} catch (error) {
+				setReviewerSessionStatus(`设置失败：${error.message || error}`, true);
+			}
+		});
+		document.getElementById("reviewer-session-input").addEventListener("keydown", async (event) => {
+			if (event.key !== "Enter") return;
+			event.preventDefault();
+			document.getElementById("reviewer-session-submit").click();
+		});
+		document.getElementById("reviewer-session-known").addEventListener("click", async (event) => {
+			const btn = event.target.closest(".reviewer-known-btn[data-reviewer-id]");
+			if (!btn) return;
+			try {
+				setReviewerSessionStatus("正在切换标注者...", false);
+				await submitReviewerSession({
+					reviewer_id: btn.dataset.reviewerId,
+					display_name: btn.dataset.reviewerName,
+				});
+				reviewerSessionModalRequired = false;
+				closeReviewerSessionModal(true);
+				await onReviewerSessionChanged();
+			} catch (error) {
+				setReviewerSessionStatus(`切换失败：${error.message || error}`, true);
+			}
+		});
+		document.getElementById("reviewer-session-overlay").addEventListener("click", (event) => {
+			if (event.target !== document.getElementById("reviewer-session-overlay")) return;
+			closeReviewerSessionModal();
 		});
 		document.getElementById("reference-source-input").addEventListener("input", syncReviewDirtyState);
 		document.getElementById("reference-source-input").addEventListener("change", syncReviewDirtyState);
@@ -4196,6 +4936,12 @@
 		});
 		document.getElementById("filter-mode").addEventListener("change", () => {
 			void refreshFilteredUids({ resetVisibleCounts: true });
+		});
+		document.getElementById("filter-toggle-btn").addEventListener("click", () => {
+			setFilterPanelCollapsed(!filterPanelCollapsed);
+		});
+		document.getElementById("review-aggregate-toggle").addEventListener("click", () => {
+			setReviewAggregateCollapsed(!reviewAggregateCollapsed, { userInitiated: true });
 		});
 		document.getElementById("prev-pending-btn").addEventListener("click", async (event) => {
 			const uid = event.currentTarget.dataset.uid;
@@ -4222,6 +4968,12 @@
 			if (event.target.id !== "other-review-filter") return;
 			otherReviewFilterValue = event.target.value;
 			renderTriageBoard({ resetVisibleCounts: true });
+		});
+		document.getElementById("triage-column-tabs").addEventListener("click", (event) => {
+			const tab = event.target.closest(".triage-tab[data-column]");
+			if (!tab) return;
+			activeTriageColumnKey = tab.dataset.column || activeTriageColumnKey;
+			renderTriageBoard({ resetVisibleCounts: false });
 		});
 		document.getElementById("map-tools-toggle").addEventListener("click", () => {
 			setMapToolsOpen(!mapToolsOpen);
@@ -4444,6 +5196,10 @@
 				cancelTimelineSegmentDraft();
 				return;
 			}
+			if (document.getElementById("reviewer-session-overlay").classList.contains("open")) {
+				closeReviewerSessionModal();
+				return;
+			}
 			if (annotationSettingsOverlay.classList.contains("open")) {
 				closeAnnotationSettings();
 				return;
@@ -4480,19 +5236,21 @@
 		const dateWindowControl = document.getElementById("date-window-control");
 		const dateWindowStart = document.getElementById("date-window-start");
 		const dateWindowEnd = document.getElementById("date-window-end");
+		const dateWindowStartDecrease = document.getElementById("date-window-start-decrease");
+		const dateWindowStartIncrease = document.getElementById("date-window-start-increase");
+		const dateWindowEndDecrease = document.getElementById("date-window-end-decrease");
+		const dateWindowEndIncrease = document.getElementById("date-window-end-increase");
 		dateWindowControl.addEventListener("mouseenter", () => setDateWindowControlActive(true));
 		dateWindowControl.addEventListener("mouseleave", () => {
 			currentTimeWindow.hoverEdge = "";
 			updateDateWindowEdgeStyles();
 			setDateWindowControlActive(false);
 		});
-		dateWindowStart.addEventListener("mouseenter", () => {
-			currentTimeWindow.hoverEdge = "start";
-			updateDateWindowEdgeStyles();
-		});
-		dateWindowEnd.addEventListener("mouseenter", () => {
-			currentTimeWindow.hoverEdge = "end";
-			updateDateWindowEdgeStyles();
+		document.querySelectorAll(".date-window-group").forEach(group => {
+			group.addEventListener("mouseenter", () => {
+				currentTimeWindow.hoverEdge = group.dataset.edge || "";
+				updateDateWindowEdgeStyles();
+			});
 		});
 		dateWindowStart.addEventListener("click", () => {
 			currentTimeWindow.activeEdge = "start";
@@ -4502,6 +5260,30 @@
 			currentTimeWindow.activeEdge = "end";
 			updateDateWindowControl();
 		});
+		dateWindowStartDecrease.addEventListener("click", (event) => {
+			event.stopPropagation();
+			currentTimeWindow.activeEdge = "start";
+			updateDateWindowControl();
+			void nudgeTimeWindow("start", -1);
+		});
+		dateWindowStartIncrease.addEventListener("click", (event) => {
+			event.stopPropagation();
+			currentTimeWindow.activeEdge = "start";
+			updateDateWindowControl();
+			void nudgeTimeWindow("start", 1);
+		});
+		dateWindowEndDecrease.addEventListener("click", (event) => {
+			event.stopPropagation();
+			currentTimeWindow.activeEdge = "end";
+			updateDateWindowControl();
+			void nudgeTimeWindow("end", -1);
+		});
+		dateWindowEndIncrease.addEventListener("click", (event) => {
+			event.stopPropagation();
+			currentTimeWindow.activeEdge = "end";
+			updateDateWindowControl();
+			void nudgeTimeWindow("end", 1);
+		});
 		dateWindowControl.addEventListener("wheel", (event) => {
 			if (!currentTimeWindow.enabled) return;
 			event.preventDefault();
@@ -4510,7 +5292,13 @@
 			void nudgeTimeWindow(edge, delta);
 		}, { passive: false });
 		dateWindowControl.addEventListener("click", (event) => {
-			if (event.target === dateWindowStart || event.target === dateWindowEnd) return;
+			if (event.target.closest(".date-window-nudge")) return;
+			const group = event.target.closest(".date-window-group");
+			if (group) {
+				currentTimeWindow.activeEdge = group.dataset.edge || currentTimeWindow.activeEdge || "start";
+				updateDateWindowControl();
+				return;
+			}
 			const rect = dateWindowControl.getBoundingClientRect();
 			const edge = event.clientX < rect.left + rect.width / 2 ? "start" : "end";
 			currentTimeWindow.activeEdge = edge;
@@ -4534,6 +5322,7 @@
 		});
 		window.addEventListener("resize", debounce(() => {
 			renderTimeScrubberControl();
+			maybeSyncTriageLayoutMode();
 		}, 80));
 
 		const SIDEBAR_MIN = 260, SIDEBAR_MAX = 600, SIDEBAR_DEFAULT = 360;
@@ -4555,6 +5344,7 @@
 				setTimeout(() => {
 					map.invalidateSize();
 					renderTimeScrubberControl();
+					maybeSyncTriageLayoutMode();
 				}, 250);
 			}
 		});
@@ -4574,6 +5364,7 @@
 				sidebarEl.style.minWidth = w + "px";
 				sidebarEl.style.maxWidth = w + "px";
 				sidebarWidth = w;
+				maybeSyncTriageLayoutMode();
 			};
 			const onUp = () => {
 				resizeEl.classList.remove("resizing");
@@ -4583,6 +5374,7 @@
 				if (map) {
 					map.invalidateSize();
 					renderTimeScrubberControl();
+					maybeSyncTriageLayoutMode();
 				}
 			};
 			document.addEventListener("mousemove", onMove);
@@ -4591,6 +5383,8 @@
 		sidebarEl.style.width = sidebarWidth + "px";
 		sidebarEl.style.minWidth = sidebarWidth + "px";
 		sidebarEl.style.maxWidth = sidebarWidth + "px";
+		renderReviewerIdentity();
+		renderReviewAggregatePanel(null);
 
 		(async function init() {
 			initMap();

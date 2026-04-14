@@ -17,6 +17,11 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--review-root", default=None, help="Override review ledger root")
 	parser.add_argument("--export-root", default=None, help="Override export root base")
 	parser.add_argument(
+		"--reviewer-id",
+		default=None,
+		help="Reviewer namespace to export from. Required when reviewer namespaces are enabled.",
+	)
+	parser.add_argument(
 		"--decision",
 		default="accept",
 		choices=["accept", "reject", "skip", "reviewed", "all"],
@@ -97,7 +102,7 @@ def main() -> None:
 		review_root=args.review_root,
 		export_root=args.export_root,
 	)
-	index_payload = read_latest_reviews(paths)
+	index_payload = read_latest_reviews(paths, reviewer_id=args.reviewer_id)
 	reviews = list(index_payload.get("reviews", {}).values())
 	selected = [item for item in reviews if _matches_decision(item, args.decision)]
 	selected = _sort_reviews(selected, args.order)
@@ -133,6 +138,7 @@ def main() -> None:
 		"generated_from": str(paths.latest_path),
 		"result_root": str(paths.result_root),
 		"review_root": str(paths.review_root),
+		"reviewer_profile": index_payload.get("reviewer_profile"),
 		"decision_filter": args.decision,
 		"limit": args.limit,
 		"order": args.order,

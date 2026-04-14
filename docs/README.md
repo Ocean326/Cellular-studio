@@ -16,6 +16,24 @@
   从现有实现角度解释自定义数据接入、标注落盘和左侧筛选逻辑。
 - [07-仓库治理与 GitHub-服务器协作.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/07-%E4%BB%93%E5%BA%93%E6%B2%BB%E7%90%86%E4%B8%8E%20GitHub-%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%8D%8F%E4%BD%9C.md)
   固定代码仓、服务器数据仓、权限、提交流程与发布流程。
+- [08-reviewer-命名空间与多人标注汇总设计.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/08-reviewer-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E4%B8%8E%E5%A4%9A%E4%BA%BA%E6%A0%87%E6%B3%A8%E6%B1%87%E6%80%BB%E8%AE%BE%E8%AE%A1.md)
+  设计 reviewer session、按 reviewer 落盘、多人轨迹汇总、导出语义与兼容迁移。
+- [09-reviewer-命名空间开发与验证计划.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/09-reviewer-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E5%BC%80%E5%8F%91%E4%B8%8E%E9%AA%8C%E8%AF%81%E8%AE%A1%E5%88%92.md)
+  给出 reviewer 命名空间功能的实施阶段、测试矩阵、风险与回滚策略。
+- [10-179服务器共享标注与开放协作方案.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/10-179%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%85%B1%E4%BA%AB%E6%A0%87%E6%B3%A8%E4%B8%8E%E5%BC%80%E6%94%BE%E5%8D%8F%E4%BD%9C%E6%96%B9%E6%A1%88.md)
+  面向 179 服务器的共享标注、GitHub 协作、上传接入、导出与权限边界总体方案。
+- [11-179服务器运行、权限与批次流转手册.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/11-179%E6%9C%8D%E5%8A%A1%E5%99%A8%E8%BF%90%E8%A1%8C%E3%80%81%E6%9D%83%E9%99%90%E4%B8%8E%E6%89%B9%E6%AC%A1%E6%B5%81%E8%BD%AC%E6%89%8B%E5%86%8C.md)
+  偏运维和执行，说明 179 上的目录、权限、批次发布、上传和导出流程。
+- [12-179部署与共享标注实施计划.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/12-179%E9%83%A8%E7%BD%B2%E4%B8%8E%E5%85%B1%E4%BA%AB%E6%A0%87%E6%B3%A8%E5%AE%9E%E6%96%BD%E8%AE%A1%E5%88%92.md)
+  将 Phase 1-4 压成可执行交付计划，明确 deliverables、slice、验收与风险。
+- [13-179方案-critique-refine-memo.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/13-179%E6%96%B9%E6%A1%88-critique-refine-memo.md)
+  对 179 部署与共享标注方案做一轮 critique-refine，保留修正依据和未决边界。
+- [14-179部署指南.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/14-179%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97.md)
+  面向 operator 的首次部署步骤，包含目录初始化、release、systemd、nginx 和 smoke 检查。
+- [15-179详细操作手册.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/15-179%E8%AF%A6%E7%BB%86%E6%93%8D%E4%BD%9C%E6%89%8B%E5%86%8C.md)
+  面向 operator 的日常运行文档，覆盖首轮批次发布、incoming 处理、导出和常见排障。
+- [16-快速接入指南.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/16-%E5%BF%AB%E9%80%9F%E6%8E%A5%E5%85%A5%E6%8C%87%E5%8D%97.md)
+  面向接入者的最小上手说明，讲清楚要准备什么、怎么上传、如何拿回自己的标注数据。
 
 ## 当前定位
 

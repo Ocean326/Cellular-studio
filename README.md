@@ -17,6 +17,7 @@
 - 批次接入与转换脚本
 - GitHub 协作、服务器部署、数据接入文档
 - 适配层约定
+- reviewer 命名空间、多人标注汇总与导出
 
 当前主目录：
 
@@ -57,6 +58,9 @@ python3 web/review_server.py --port 8016
 打开：
 
 - `http://127.0.0.1:8016/web/index.html`
+
+首次进入 reviewer 模式时，页面会要求输入 `姓名/昵称`，作为当前批次里的标注来源。
+这是一层轻量 `reviewer session`，用于命名空间隔离和多人汇总，不是权限鉴权。
 
 如果需要指定数据位置，可以显式传参：
 
@@ -126,9 +130,55 @@ python3 scripts/start_review_studio.py --port 8016
 - [docs/05-组内共享部署与数据接入规范.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/05-%E7%BB%84%E5%86%85%E5%85%B1%E4%BA%AB%E9%83%A8%E7%BD%B2%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%8E%A5%E5%85%A5%E8%A7%84%E8%8C%83.md)
   批次目录、输入格式、输出位置
 - [docs/06-后台逻辑与存储说明.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/06-%E5%90%8E%E5%8F%B0%E9%80%BB%E8%BE%91%E4%B8%8E%E5%AD%98%E5%82%A8%E8%AF%B4%E6%98%8E.md)
-  review / timeline annotation / 左侧筛选逻辑
+  review / reviewer namespace / timeline annotation / 左侧筛选逻辑
 - [docs/07-仓库治理与 GitHub-服务器协作.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/07-%E4%BB%93%E5%BA%93%E6%B2%BB%E7%90%86%E4%B8%8E%20GitHub-%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%8D%8F%E4%BD%9C.md)
   代码仓、服务器、权限、发布流程
+- [docs/08-reviewer-命名空间与多人标注汇总设计.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/08-reviewer-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E4%B8%8E%E5%A4%9A%E4%BA%BA%E6%A0%87%E6%B3%A8%E6%B1%87%E6%80%BB%E8%AE%BE%E8%AE%A1.md)
+  reviewer session、多人汇总与导出设计
+- [docs/09-reviewer-命名空间开发与验证计划.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/09-reviewer-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E5%BC%80%E5%8F%91%E4%B8%8E%E9%AA%8C%E8%AF%81%E8%AE%A1%E5%88%92.md)
+  reviewer namespace 功能实施与验证计划
+- [docs/14-179部署指南.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/14-179%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97.md)
+  面向 179 的首次部署步骤
+- [docs/15-179详细操作手册.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/15-179%E8%AF%A6%E7%BB%86%E6%93%8D%E4%BD%9C%E6%89%8B%E5%86%8C.md)
+  operator 日常运行与首轮批次发布操作
+- [docs/16-快速接入指南.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/16-%E5%BF%AB%E9%80%9F%E6%8E%A5%E5%85%A5%E6%8C%87%E5%8D%97.md)
+  接入者最小必读文档
+
+## 当前 reviewer 命名空间模型
+
+当前默认存储已经不是“全局一个 latest_reviews.json”，而是：
+
+```text
+<batch_root>/review/
+  system/
+    reviewer_registry.json
+  reviewers/
+    <reviewer_id>/
+      profile.json
+      reviews/
+        ledger.jsonl
+        latest_reviews.json
+      timeline_annotations/
+        ledger.jsonl
+        <uid>.json
+  aggregate/
+    stats.json
+    by_uid/
+      <uid>.json
+```
+
+这意味着：
+
+- triage 默认按“当前 reviewer”工作
+- 同一条轨迹可以汇总多个 reviewer 的最新审核
+- `accepted_assets` 默认按 reviewer 分目录导出
+
+如需把旧批次的 legacy review 结构迁到 reviewer 命名空间，可使用：
+
+```bash
+cd /Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio
+python3 scripts/migrate_legacy_review_namespace.py --review-root /path/to/batch/review --clean-target
+```
 
 ## Git 边界
 

@@ -1,0 +1,21 @@
+[Unit]
+Description=Trajectory Annotation Studio
+After=network.target
+
+[Service]
+Type=simple
+User=ta_svc
+Group=ta_admin
+WorkingDirectory=/srv/trajectory_annotation_studio/app/current
+ExecStart=/usr/bin/python3 /srv/trajectory_annotation_studio/app/current/web/review_server.py \
+  --host 127.0.0.1 \
+  --port 8016 \
+  --project-root /srv/trajectory_annotation_studio/app/current \
+  --batches-root /srv/trajectory_annotation_studio/shared/published \
+  --incoming-root /srv/trajectory_annotation_studio/shared/incoming \
+  --upload-max-bytes 2147483648
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
