@@ -36,6 +36,8 @@
   面向接入者的最小上手说明，讲清楚要准备什么、怎么上传、如何拿回自己的标注数据。
 - [17-179首轮真实试运行记录.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/17-179%E9%A6%96%E8%BD%AE%E7%9C%9F%E5%AE%9E%E8%AF%95%E8%BF%90%E8%A1%8C%E8%AE%B0%E5%BD%95.md)
   沉淀真实 179 首轮试运行的约束、通过项和后续优化点。
+- [18-179试运行复盘与第二轮优化建议.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/18-179%E8%AF%95%E8%BF%90%E8%A1%8C%E5%A4%8D%E7%9B%98%E4%B8%8E%E7%AC%AC%E4%BA%8C%E8%BD%AE%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE.md)
+  把首轮真实执行压成可复用复盘，并明确第二轮优先级和不建议现在就做的事。
 
 ## 当前定位
 
