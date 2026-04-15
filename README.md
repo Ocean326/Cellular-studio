@@ -143,6 +143,8 @@ python3 scripts/start_review_studio.py --port 8016
   operator 日常运行与首轮批次发布操作
 - [docs/16-快速接入指南.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/16-%E5%BF%AB%E9%80%9F%E6%8E%A5%E5%85%A5%E6%8C%87%E5%8D%97.md)
   接入者最小必读文档
+- [docs/17-179首轮真实试运行记录.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/17-179%E9%A6%96%E8%BD%AE%E7%9C%9F%E5%AE%9E%E8%AF%95%E8%BF%90%E8%A1%8C%E8%AE%B0%E5%BD%95.md)
+  记录真实 179 试运行中暴露的约束、已验证路径和后续优化点
 
 ## 当前 reviewer 命名空间模型
 
