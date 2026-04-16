@@ -7,7 +7,7 @@ import re
 import shutil
 import tempfile
 import zipfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
@@ -15,7 +15,7 @@ from typing import Any
 
 
 VALID_DECISIONS = frozenset({"accept", "reject", "skip"})
-VALID_REFERENCE_FILES = frozenset({"line.csv", "fmm.csv"})
+LEGACY_REFERENCE_FILES = ("line.csv", "fmm.csv")
 
 SCHEMA_VERSION = 2
 
@@ -79,6 +79,7 @@ class ReviewEntry:
 	timestamp: str
 	notes: str = ""
 	reference_source: str = ""
+	trajectory_tags: list[str] = field(default_factory=list)
 	schema_version: int = SCHEMA_VERSION
 
 
@@ -143,6 +144,94 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 	tmp_path.replace(path)
 
 
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+	seen: set[str] = set()
+	result: list[str] = []
+	for item in items:
+		value = str(item or "").strip()
+		if not value or value in seen:
+			continue
+		seen.add(value)
+		result.append(value)
+	return result
+
+
+def _read_result_manifest(result_root: str | Path) -> dict[str, Any]:
+	manifest_path = Path(result_root) / "manifest.json"
+	if not manifest_path.exists():
+		return {}
+	try:
+		return _read_json(manifest_path)
+	except Exception:
+		return {}
+
+
+def _normalize_manifest_layer_specs(manifest_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+	layer_order = [
+		str(item or "").strip()
+		for item in manifest_payload.get("layers", []) or []
+		if str(item or "").strip()
+	]
+	layer_specs = manifest_payload.get("layer_specs") if isinstance(manifest_payload.get("layer_specs"), dict) else {}
+	legacy_layer_styles = (
+		manifest_payload.get("layer_styles") if isinstance(manifest_payload.get("layer_styles"), dict) else {}
+	)
+	if not layer_order:
+		layer_order = _dedupe_preserve_order([*legacy_layer_styles.keys(), *layer_specs.keys()])
+	specs: dict[str, dict[str, Any]] = {}
+	for layer in layer_order:
+		merged: dict[str, Any] = {}
+		if isinstance(legacy_layer_styles.get(layer), dict):
+			merged.update(legacy_layer_styles[layer])
+		if isinstance(layer_specs.get(layer), dict):
+			merged.update(layer_specs[layer])
+		filename = str(merged.get("filename") or f"{layer}.csv").strip() or f"{layer}.csv"
+		merged["filename"] = filename
+		specs[layer] = merged
+	return specs
+
+
+def get_manifest_review_reference_files(result_root: str | Path) -> list[str]:
+	manifest_payload = _read_result_manifest(result_root)
+	if "review_reference_files" in manifest_payload and isinstance(manifest_payload.get("review_reference_files"), list):
+		reference_files = [
+			str(item or "").strip()
+			for item in manifest_payload.get("review_reference_files", []) or []
+			if str(item or "").strip()
+		]
+		return _dedupe_preserve_order(reference_files)
+	specs = _normalize_manifest_layer_specs(manifest_payload)
+	reference_layers = {
+		str(item or "").strip()
+		for item in manifest_payload.get("review_reference_layers", []) or []
+		if str(item or "").strip()
+	}
+	from_specs = [
+		str(spec.get("filename") or "").strip()
+		for layer, spec in specs.items()
+		if spec.get("review_reference") or layer in reference_layers
+	]
+	if from_specs:
+		return _dedupe_preserve_order(from_specs)
+	return list(LEGACY_REFERENCE_FILES)
+
+
+def get_manifest_export_filenames(result_root: str | Path) -> list[str]:
+	manifest_payload = _read_result_manifest(result_root)
+	specs = _normalize_manifest_layer_specs(manifest_payload)
+	declared = [str(spec.get("filename") or "").strip() for spec in specs.values()]
+	return _dedupe_preserve_order(
+		[
+			"raw.csv",
+			"snap.csv",
+			"od.csv",
+			"fmm.csv",
+			"line.csv",
+			*declared,
+		]
+	)
+
+
 def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
 	path.parent.mkdir(parents=True, exist_ok=True)
 	with open(path, "a", encoding="utf-8") as handle:
@@ -174,6 +263,24 @@ def validate_decision(decision: str) -> str:
 			f"Invalid decision: {decision!r}. Expected one of {sorted(VALID_DECISIONS)}"
 		)
 	return value
+
+
+def normalize_trajectory_tags(value: Any) -> list[str]:
+	if value is None:
+		raw_items: list[Any] = []
+	elif isinstance(value, (list, tuple, set)):
+		raw_items = list(value)
+	else:
+		raw_items = [value]
+	normalized: list[str] = []
+	seen: set[str] = set()
+	for item in raw_items:
+		text = str(item or "").strip()
+		if not text or text in seen:
+			continue
+		seen.add(text)
+		normalized.append(text)
+	return normalized
 
 
 def normalize_uid(uid: Any) -> str:
@@ -455,6 +562,9 @@ def _normalize_review_record(raw: dict[str, Any]) -> dict[str, Any]:
 		"timestamp": str(raw.get("timestamp") or "").strip() or utc_now_iso(),
 		"notes": str(raw.get("notes") or "").strip(),
 		"reference_source": str(raw.get("reference_source") or "").strip(),
+		"trajectory_tags": normalize_trajectory_tags(
+			raw.get("trajectory_tags", raw.get("tags", raw.get("tag")))
+		),
 	}
 	return record
 
@@ -615,22 +725,30 @@ def csv_has_data(path: str | Path) -> bool:
 		return False
 
 
-def choose_reference_source(uid_dir: str | Path) -> str:
+def choose_reference_source(uid_dir: str | Path, result_root: str | Path | None = None) -> str:
 	base = Path(uid_dir)
-	for candidate in ("line.csv", "fmm.csv"):
+	candidates = get_manifest_review_reference_files(result_root or base.parent)
+	for candidate in candidates:
 		if csv_has_data(base / candidate):
 			return candidate
 	return ""
 
 
-def validate_accept_reference(uid_dir: str | Path, reference_source: str, sample_id: str) -> str:
+def validate_accept_reference(
+	uid_dir: str | Path,
+	reference_source: str,
+	sample_id: str,
+	result_root: str | Path | None = None,
+) -> str:
 	base = Path(uid_dir)
+	candidates = get_manifest_review_reference_files(result_root or base.parent)
 	chosen = str(reference_source or "").strip()
-	if chosen not in VALID_REFERENCE_FILES:
-		chosen = choose_reference_source(base)
-	if chosen not in VALID_REFERENCE_FILES:
+	if chosen not in candidates:
+		chosen = choose_reference_source(base, result_root=result_root)
+	if chosen not in candidates:
+		expected = " or ".join(candidates) if candidates else "a usable reference CSV"
 		raise ValueError(
-			f"Accepted sample {sample_id} requires a usable line.csv or fmm.csv reference asset."
+			f"Accepted sample {sample_id} requires a usable {expected} reference asset."
 		)
 	if not csv_has_data(base / chosen):
 		raise ValueError(
@@ -661,8 +779,11 @@ def normalize_review_payload(
 	timestamp = str(payload.get("timestamp") or "").strip() or utc_now_iso()
 	notes = str(payload.get("notes") or "").strip()
 	reference_source = str(payload.get("reference_source") or "").strip()
+	trajectory_tags = normalize_trajectory_tags(
+		payload.get("trajectory_tags", payload.get("tags", payload.get("tag")))
+	)
 	if not reference_source:
-		reference_source = choose_reference_source(paths.result_root / uid)
+		reference_source = choose_reference_source(paths.result_root / uid, result_root=paths.result_root)
 	return ReviewEntry(
 		uid=uid,
 		sample_id=sample_id,
@@ -673,6 +794,7 @@ def normalize_review_payload(
 		timestamp=timestamp,
 		notes=notes,
 		reference_source=reference_source,
+		trajectory_tags=trajectory_tags,
 	)
 
 
@@ -982,6 +1104,7 @@ def write_review(paths: ReviewPaths, payload: dict[str, Any]) -> dict[str, Any]:
 			paths.result_root / entry.uid,
 			entry.reference_source,
 			entry.sample_id,
+			result_root=paths.result_root,
 		)
 	reviewer_paths = resolve_reviewer_paths(paths, entry.reviewer_id, entry.reviewer_name)
 	reviewer_lock = _get_lock(reviewer_paths.reviewer_root)
@@ -1059,9 +1182,10 @@ def export_accepted_assets(
 			uid_dir,
 			str(review.get("reference_source") or "").strip(),
 			sample_id,
+			result_root=paths.result_root,
 		)
 		reference_exported = False
-		if reference_name in VALID_REFERENCE_FILES:
+		if reference_name:
 			reference_exported = _safe_copy(uid_dir / reference_name, target_dir / reference_name)
 
 		review_record = dict(review)
@@ -1080,6 +1204,7 @@ def export_accepted_assets(
 				"reviewer": review.get("reviewer_name") or review.get("reviewer", ""),
 				"timestamp": review.get("timestamp", ""),
 				"notes": review.get("notes", ""),
+				"trajectory_tags": normalize_trajectory_tags(review.get("trajectory_tags")),
 				"reference_source": reference_name,
 				"raw_exported": raw_exported,
 				"reference_exported": reference_exported,
@@ -1277,6 +1402,7 @@ def export_reviewer_bundle(
 	batch_meta = _read_json(batch_meta_path) if batch_meta_path.exists() else {}
 
 	exported_samples: list[dict[str, Any]] = []
+	export_filenames = get_manifest_export_filenames(paths.result_root)
 	for review in selected_reviews:
 		uid = normalize_uid(review.get("uid"))
 		sample_id = str(review.get("sample_id") or uid).strip() or uid
@@ -1285,7 +1411,7 @@ def export_reviewer_bundle(
 		target_sample_dir.mkdir(parents=True, exist_ok=True)
 
 		copied_files: dict[str, bool] = {}
-		for filename in ("raw.csv", "snap.csv", "od.csv", "fmm.csv", "line.csv"):
+		for filename in export_filenames:
 			copied_files[filename] = _safe_copy(uid_dir / filename, target_sample_dir / filename)
 
 		review_record = dict(review)
@@ -1325,6 +1451,7 @@ def export_reviewer_bundle(
 				"decision": str(review.get("decision") or ""),
 				"timestamp": str(review.get("timestamp") or ""),
 				"notes": str(review.get("notes") or ""),
+				"trajectory_tags": normalize_trajectory_tags(review.get("trajectory_tags")),
 				"reviewer_id": profile["reviewer_id"],
 				"reviewer_name": profile["reviewer_name"],
 				"sample_dir": str(target_sample_dir),

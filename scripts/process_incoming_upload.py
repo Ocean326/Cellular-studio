@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument(
 		"--require-review-reference",
 		action="store_true",
-		help="Require every uid to contain line.csv or fmm.csv during validation",
+		help="Require every uid to contain a manifest-declared review reference file; falls back to line.csv/fmm.csv",
 	)
 	parser.add_argument("--publish", action="store_true", help="Publish validated result root to published-root")
 	return parser.parse_args()

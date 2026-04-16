@@ -11,6 +11,7 @@ from typing import Any
 
 
 DEFAULT_RESULT_FILES = ("raw.csv", "snap.csv", "od.csv", "fmm.csv", "line.csv")
+LEGACY_REVIEW_REFERENCE_FILES = ("line.csv", "fmm.csv")
 
 
 def utc_now_iso() -> str:
@@ -36,6 +37,87 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 		handle.write("\n")
 		tmp_path = Path(handle.name)
 	tmp_path.replace(path)
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+	seen: set[str] = set()
+	result: list[str] = []
+	for item in items:
+		value = str(item or "").strip()
+		if not value or value in seen:
+			continue
+		seen.add(value)
+		result.append(value)
+	return result
+
+
+def _normalize_manifest_layer_specs(manifest_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+	layer_order = [
+		str(item or "").strip()
+		for item in manifest_payload.get("layers", []) or []
+		if str(item or "").strip()
+	]
+	layer_specs = manifest_payload.get("layer_specs") if isinstance(manifest_payload.get("layer_specs"), dict) else {}
+	legacy_layer_styles = (
+		manifest_payload.get("layer_styles") if isinstance(manifest_payload.get("layer_styles"), dict) else {}
+	)
+	if not layer_order:
+		layer_order = _dedupe_preserve_order(
+			[
+				*legacy_layer_styles.keys(),
+				*layer_specs.keys(),
+			]
+		)
+	specs: dict[str, dict[str, Any]] = {}
+	for layer in layer_order:
+		merged: dict[str, Any] = {}
+		if isinstance(legacy_layer_styles.get(layer), dict):
+			merged.update(legacy_layer_styles[layer])
+		if isinstance(layer_specs.get(layer), dict):
+			merged.update(layer_specs[layer])
+		filename = str(merged.get("filename") or f"{layer}.csv").strip() or f"{layer}.csv"
+		merged["filename"] = filename
+		specs[layer] = merged
+	return specs
+
+
+def get_manifest_layer_filenames(manifest_payload: dict[str, Any]) -> list[str]:
+	specs = _normalize_manifest_layer_specs(manifest_payload)
+	if specs:
+		return _dedupe_preserve_order([str(spec.get("filename") or "").strip() for spec in specs.values()])
+	layers = [
+		str(item or "").strip()
+		for item in manifest_payload.get("layers", []) or []
+		if str(item or "").strip()
+	]
+	if layers:
+		return _dedupe_preserve_order([f"{layer}.csv" for layer in layers])
+	return list(DEFAULT_RESULT_FILES)
+
+
+def get_manifest_review_reference_filenames(manifest_payload: dict[str, Any]) -> list[str]:
+	if "review_reference_files" in manifest_payload and isinstance(manifest_payload.get("review_reference_files"), list):
+		reference_files = [
+			str(item or "").strip()
+			for item in manifest_payload.get("review_reference_files", []) or []
+			if str(item or "").strip()
+		]
+		return _dedupe_preserve_order(reference_files)
+
+	specs = _normalize_manifest_layer_specs(manifest_payload)
+	reference_layers = {
+		str(item or "").strip()
+		for item in manifest_payload.get("review_reference_layers", []) or []
+		if str(item or "").strip()
+	}
+	from_specs = [
+		str(spec.get("filename") or "").strip()
+		for layer, spec in specs.items()
+		if spec.get("review_reference") or layer in reference_layers
+	]
+	if from_specs:
+		return _dedupe_preserve_order(from_specs)
+	return list(LEGACY_REVIEW_REFERENCE_FILES)
 
 
 def ensure_dir(path: Path, dry_run: bool = False) -> dict[str, str]:
@@ -64,10 +146,11 @@ def summarize_result_root(result_root: Path) -> dict[str, Any]:
 	manifest_payload = read_json(manifest_path) if manifest_path.exists() else {}
 	uids = list(manifest_payload.get("uids") or [])
 	uid_dirs = sorted(path.name for path in result_root.iterdir() if path.is_dir()) if result_root.exists() else []
-	file_counts = {name: 0 for name in DEFAULT_RESULT_FILES}
+	layer_files = get_manifest_layer_filenames(manifest_payload) if manifest_payload else list(DEFAULT_RESULT_FILES)
+	file_counts = {name: 0 for name in layer_files}
 	for uid in uid_dirs:
 		uid_dir = result_root / uid
-		for name in DEFAULT_RESULT_FILES:
+		for name in layer_files:
 			if (uid_dir / name).exists():
 				file_counts[name] += 1
 	return {
@@ -77,6 +160,10 @@ def summarize_result_root(result_root: Path) -> dict[str, Any]:
 		"manifest_uid_count": len(uids),
 		"uid_dir_count": len(uid_dirs),
 		"uid_sample": uid_dirs[:10],
+		"layer_files": layer_files,
+		"review_reference_files": get_manifest_review_reference_filenames(manifest_payload)
+		if manifest_payload
+		else list(LEGACY_REVIEW_REFERENCE_FILES),
 		"file_counts": file_counts,
 	}
 
@@ -97,21 +184,33 @@ def validate_result_root(
 		errors.append("states_index.json is required")
 	if summary["manifest_exists"]:
 		manifest_payload = read_json(result_root / "manifest.json")
+		declared_layer_files = get_manifest_layer_filenames(manifest_payload)
+		review_reference_files = get_manifest_review_reference_filenames(manifest_payload)
 		uids = [str(item).strip() for item in manifest_payload.get("uids") or [] if str(item).strip()]
 		if not uids:
 			errors.append("manifest.json.uids must be non-empty")
 		for uid in uids:
 			if not (result_root / uid).is_dir():
 				errors.append(f"missing uid directory for manifest uid: {uid}")
+				continue
+			uid_dir = result_root / uid
+			if declared_layer_files and not any((uid_dir / filename).exists() for filename in declared_layer_files):
+				errors.append(
+					f"uid {uid} does not contain any manifest-declared layer file: {', '.join(declared_layer_files)}"
+				)
 		if summary["uid_dir_count"] and summary["manifest_uid_count"] != summary["uid_dir_count"]:
 			warnings.append(
 				f"manifest uid count {summary['manifest_uid_count']} differs from result dir count {summary['uid_dir_count']}"
 			)
 		if require_review_reference:
+			if not review_reference_files:
+				errors.append("manifest does not declare any review reference files")
 			for uid in uids:
 				uid_dir = result_root / uid
-				if not (uid_dir / "line.csv").exists() and not (uid_dir / "fmm.csv").exists():
-					errors.append(f"uid {uid} is missing both line.csv and fmm.csv")
+				if not any((uid_dir / filename).exists() for filename in review_reference_files):
+					errors.append(
+						f"uid {uid} is missing all review reference files: {', '.join(review_reference_files)}"
+					)
 	else:
 		if summary["uid_dir_count"] == 0:
 			errors.append("result root does not contain any uid directories")

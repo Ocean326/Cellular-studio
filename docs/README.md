@@ -38,6 +38,8 @@
   沉淀真实 179 首轮试运行的约束、通过项和后续优化点。
 - [18-179试运行复盘与第二轮优化建议.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/18-179%E8%AF%95%E8%BF%90%E8%A1%8C%E5%A4%8D%E7%9B%98%E4%B8%8E%E7%AC%AC%E4%BA%8C%E8%BD%AE%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE.md)
   把首轮真实执行压成可复用复盘，并明确第二轮优先级和不建议现在就做的事。
+- [19-异构多图层轨迹接入架构与Arena-V15适配.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/19-%E5%BC%82%E6%9E%84%E5%A4%9A%E5%9B%BE%E5%B1%82%E8%BD%A8%E8%BF%B9%E6%8E%A5%E5%85%A5%E6%9E%B6%E6%9E%84%E4%B8%8EArena-V15%E9%80%82%E9%85%8D.md)
+  说明 manifest 驱动的异构图层合同、review reference 兼容策略，以及 `research_arena` V1.5 的 GPS+tier1-4 接入方式。
 
 ## 当前定位
 

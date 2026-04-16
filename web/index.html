@@ -366,6 +366,177 @@
 		.size-val { width: 18px; text-align: right; color: #666; }
 
 		#map-container { flex: 1; position: relative; }
+		#review-panel {
+			position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+			z-index: 1002; width: min(96vw, 1220px);
+			padding: 12px 14px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.58);
+			background: rgba(255,255,255,0.72); backdrop-filter: blur(16px);
+			box-shadow: 0 12px 34px rgba(15,23,42,0.16);
+			opacity: 0.97; transition: opacity 0.18s ease, background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+			display: flex; flex-direction: column; gap: 10px; color: #0f172a;
+		}
+		#review-panel:hover,
+		#review-panel.active {
+			opacity: 1; background: rgba(255,255,255,0.82); border-color: rgba(255,255,255,0.76);
+			transform: translateX(-50%) translateY(-1px);
+		}
+		#review-panel.collapsed { padding-bottom: 12px; }
+		#review-panel.collapsed #review-panel-body,
+		#review-panel.collapsed #review-panel-footer,
+		#review-panel.collapsed #review-aggregate-panel { display: none; }
+		#review-panel-head {
+			display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+		}
+		#review-title-wrap {
+			min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 6px;
+		}
+		.review-summary-row {
+			display: flex; align-items: center; gap: 10px; min-width: 0;
+		}
+		#review-current {
+			min-width: 0; flex: 1; font-size: 16px; font-weight: 800;
+			color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+		}
+		.review-identity-row {
+			display: inline-flex; align-items: center; justify-content: space-between; gap: 8px;
+			height: 38px; padding: 0 8px 0 12px; border-radius: 999px; background: rgba(255,255,255,0.42);
+			border: 1px solid rgba(15,23,42,0.08); flex: 0 0 auto;
+			box-shadow: inset 0 1px 0 rgba(255,255,255,0.35);
+		}
+		.review-identity-text {
+			min-width: 0; display: flex; flex-direction: column; gap: 1px;
+		}
+		.review-identity-label { font-size: 10px; color: rgba(51,65,85,0.72); }
+		.review-identity-value {
+			font-size: 12px; color: #0f172a; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+		}
+		.reviewer-switch-btn {
+			height: 28px; padding: 0 12px; border: 1px solid rgba(15,23,42,0.08); border-radius: 999px;
+			background: rgba(255,255,255,0.52); color: #0f172a; cursor: pointer; font-size: 11px; font-weight: 700;
+		}
+		.reviewer-switch-btn:hover { background: rgba(255,255,255,0.7); }
+		.review-panel-actions {
+			display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto;
+			flex-wrap: nowrap;
+		}
+		.review-nav { display: inline-flex; gap: 6px; flex: 0 0 auto; }
+		.review-nav button,
+		.review-actions button,
+		.review-panel-toggle {
+			height: 38px; padding: 0 16px; border-radius: 999px; cursor: pointer;
+			border: 1px solid rgba(15,23,42,0.08); background: rgba(255,255,255,0.46);
+			color: #0f172a; font: inherit; font-size: 12px; font-weight: 700;
+			transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease, opacity 0.16s ease;
+			box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
+		}
+		.review-nav button:hover:not(:disabled),
+		.review-actions button:hover:not(:disabled),
+		.review-panel-toggle:hover {
+			background: rgba(255,255,255,0.72); border-color: rgba(15,23,42,0.14); transform: translateY(-1px);
+		}
+		.review-nav button:disabled,
+		.review-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+		#prev-pending-btn,
+		#next-pending-btn,
+		#review-panel-toggle {
+			background: rgba(255,255,255,0.56); color: #1e293b;
+		}
+		#review-panel-body {
+			display: flex; align-items: center; gap: 10px; min-width: 0;
+		}
+		.review-decisions { display: inline-flex; gap: 6px; flex: 0 0 auto; }
+		.review-decision-btn {
+			min-width: 68px; height: 38px; border: 1px solid rgba(15,23,42,0.08);
+			background: rgba(255,255,255,0.44); border-radius: 999px; cursor: pointer;
+			padding: 0 14px; font-size: 12px; font-weight: 700; color: rgba(15,23,42,0.86);
+			box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
+		}
+		.review-decision-btn.active { color: #fff; border-color: transparent; }
+		.review-decision-btn[data-decision="accept"].active { background: #2e7d32; }
+		.review-decision-btn[data-decision="reject"].active { background: #c62828; }
+		.review-decision-btn[data-decision="skip"].active { background: #546e7a; }
+		.review-tag-wrap {
+			display: inline-flex; align-items: center; gap: 8px; min-width: 180px; flex: 0 0 220px;
+		}
+		.review-inline-label {
+			font-size: 11px; font-weight: 700; color: rgba(51,65,85,0.78); white-space: nowrap;
+		}
+		.review-tag-select,
+		.review-note-input,
+		#review-notes.review-note-input {
+			border: 1px solid rgba(15,23,42,0.08); border-radius: 999px;
+			background: rgba(255,255,255,0.54); color: #0f172a; font: inherit; font-size: 12px;
+			box-shadow: inset 0 1px 0 rgba(255,255,255,0.42);
+		}
+		.review-tag-select {
+			width: 100%; min-width: 0; height: 38px; padding: 0 14px; outline: none;
+			appearance: none;
+		}
+		.review-tag-select option { color: #0f172a; }
+		.review-note-input {
+			flex: 1 1 320px; min-width: 220px; height: 38px; padding: 0 14px;
+		}
+		#review-notes.review-note-input {
+			min-height: 0; height: 38px; resize: none;
+		}
+		.review-note-input::placeholder,
+		#review-notes.review-note-input::placeholder { color: rgba(51,65,85,0.4); }
+		.review-input-hidden { display: none; }
+		.review-actions { display: inline-flex; gap: 8px; flex: 0 0 auto; }
+		#save-review-btn { background: rgba(59,130,246,0.16); border-color: rgba(59,130,246,0.2); color: #1d4ed8; }
+		#refresh-review-btn { background: rgba(255,255,255,0.56); color: #334155; }
+		#review-panel-footer {
+			display: flex; align-items: center; justify-content: flex-start; gap: 8px; flex-wrap: wrap;
+		}
+		.review-meta {
+			font-size: 12px; color: rgba(51,65,85,0.84); line-height: 1.5;
+			white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+		}
+		.review-status-row {
+			display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;
+		}
+		.review-status-chip {
+			padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,0.4);
+			border: 1px solid rgba(15,23,42,0.08); font-size: 11px; color: rgba(51,65,85,0.86);
+		}
+		#review-dirty-status.is-dirty {
+			background: rgba(254,226,226,0.88); border-color: rgba(248,113,113,0.28); color: #b91c1c; font-weight: 700;
+		}
+		#review-aggregate-panel {
+			display: none !important;
+		}
+		.review-aggregate-header {
+			display: flex; align-items: center; justify-content: space-between; gap: 8px;
+			font-size: 12px; font-weight: 700; color: #0f172a;
+			width: 100%; border: none; background: transparent; padding: 0; cursor: pointer; text-align: left; font: inherit;
+		}
+		.review-aggregate-summary { font-size: 11px; color: rgba(51,65,85,0.76); line-height: 1.5; }
+		.review-aggregate-list { display: flex; flex-direction: column; gap: 6px; max-height: 188px; overflow: auto; }
+		#review-aggregate-panel.collapsed .review-aggregate-list { display: none; }
+		.review-aggregate-item {
+			padding: 8px 9px; border-radius: 12px; border: 1px solid rgba(15,23,42,0.08); background: rgba(255,255,255,0.56);
+			display: flex; flex-direction: column; gap: 4px;
+		}
+		.review-aggregate-item-top {
+			display: flex; align-items: center; justify-content: space-between; gap: 8px;
+		}
+		.review-aggregate-name { font-size: 12px; font-weight: 700; color: #0f172a; }
+		.review-aggregate-meta { font-size: 11px; color: rgba(51,65,85,0.72); line-height: 1.45; }
+		.review-aggregate-note { font-size: 11px; color: rgba(15,23,42,0.88); line-height: 1.45; }
+		.review-aggregate-empty {
+			padding: 10px 0; font-size: 11px; color: rgba(51,65,85,0.58); text-align: center;
+		}
+		.review-aggregate-toggle-text {
+			font-size: 11px; color: rgba(51,65,85,0.72); font-weight: 700; white-space: nowrap;
+		}
+		.review-tag-chip-row {
+			display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;
+		}
+		.review-tag-chip {
+			display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px;
+			background: rgba(96,165,250,0.18); border: 1px solid rgba(147,197,253,0.22);
+			font-size: 10px; font-weight: 700; color: #dbeafe;
+		}
 		#map { width: 100%; height: 100%; }
 		#time-plus8-control {
 			position: absolute; bottom: 50px; left: 12px; z-index: 1000;
@@ -495,7 +666,7 @@
 			min-width: 0; flex: 1;
 		}
 		#floating-tools-stack {
-			position: absolute; top: 10px; right: 10px; z-index: 1000;
+			position: absolute; right: 12px; bottom: 102px; z-index: 1000;
 			display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
 		}
 		#help-panel {
@@ -505,10 +676,12 @@
 			backdrop-filter: blur(14px);
 			font-size: 12px; line-height: 1.55; overflow: hidden; color: #f8fafc;
 		}
-		#help-panel.collapsed { max-width: 48px; max-height: 48px; }
+		#help-panel.collapsed { max-width: none; max-height: 48px; }
 		#help-panel.collapsed #help-content { display: none; }
-		#help-panel.collapsed .help-header-text,
 		#help-panel.collapsed #help-toggle-btn { display: none; }
+		#help-panel.collapsed #help-header {
+			padding: 10px 12px;
+		}
 		#help-header {
 			padding: 10px 12px; color: #fff; font-weight: 600;
 			display: flex; align-items: center; justify-content: space-between; cursor: pointer;
@@ -602,8 +775,17 @@
 		#annotation-category-list {
 			display: flex; flex-direction: column; gap: 10px;
 		}
+		#annotation-tag-list {
+			display: flex; flex-direction: column; gap: 10px;
+		}
 		.annotation-category-row {
 			display: grid; grid-template-columns: 20px 32px minmax(0, 1fr) auto;
+			align-items: center; gap: 10px; padding: 10px 12px;
+			border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
+			background: rgba(255,255,255,0.05);
+		}
+		.annotation-tag-row {
+			display: grid; grid-template-columns: minmax(0, 1fr) auto;
 			align-items: center; gap: 10px; padding: 10px 12px;
 			border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
 			background: rgba(255,255,255,0.05);
@@ -621,7 +803,15 @@
 			width: 100%; min-width: 0; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
 			background: rgba(15,23,42,0.4); color: #f8fafc; padding: 9px 10px; font: inherit; font-size: 13px;
 		}
+		.annotation-tag-name {
+			width: 100%; min-width: 0; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+			background: rgba(15,23,42,0.4); color: #f8fafc; padding: 9px 10px; font: inherit; font-size: 13px;
+		}
 		.annotation-category-delete {
+			border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; background: rgba(255,255,255,0.04);
+			color: rgba(248,250,252,0.92); padding: 8px 10px; cursor: pointer; font: inherit; font-size: 12px;
+		}
+		.annotation-tag-delete {
 			border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; background: rgba(255,255,255,0.04);
 			color: rgba(248,250,252,0.92); padding: 8px 10px; cursor: pointer; font: inherit; font-size: 12px;
 		}
@@ -676,6 +866,34 @@
 			font-size: 11px; color: rgba(226,232,240,0.74);
 		}
 		@media (max-width: 860px) {
+			#review-panel {
+				width: min(98vw, 98vw); top: 8px; padding: 10px 12px;
+			}
+			#review-panel-head,
+			#review-panel-body {
+				flex-wrap: wrap;
+			}
+			.review-summary-row,
+			.review-panel-actions,
+			.review-tag-wrap,
+			.review-actions,
+			.review-nav {
+				width: 100%;
+			}
+			.review-identity-row {
+				width: 100%;
+			}
+			.review-note-input {
+				min-width: 0; width: 100%;
+			}
+			.review-panel-actions,
+			.review-actions,
+			.review-nav {
+				justify-content: space-between;
+			}
+			.review-panel-actions {
+				flex-wrap: wrap;
+			}
 			#annotation-settings-body {
 				grid-template-columns: 1fr;
 			}
@@ -842,47 +1060,6 @@
 					<div class="status" id="filter-status">状态筛选：未启用</div>
 				</div>
 			</div>
-			<div id="review-panel">
-				<div id="review-panel-head">
-					<div id="review-title-wrap">
-						<h4>整轨审核</h4>
-						<div id="review-current">请选择 UID 后保存 `accept / reject / skip`。</div>
-					</div>
-				</div>
-				<div class="review-identity-row">
-					<div class="review-identity-text">
-						<div class="review-identity-label">当前标注者</div>
-						<div id="reviewer-identity-value" class="review-identity-value">未设置</div>
-					</div>
-					<button id="reviewer-switch-btn" class="reviewer-switch-btn" type="button">切换</button>
-				</div>
-				<div class="review-nav">
-					<button id="prev-pending-btn" type="button">上一条待审</button>
-					<button id="next-pending-btn" type="button">下一条待审</button>
-				</div>
-				<div class="review-decisions">
-					<button type="button" class="review-decision-btn" data-decision="accept">accept</button>
-					<button type="button" class="review-decision-btn" data-decision="reject">reject</button>
-					<button type="button" class="review-decision-btn" data-decision="skip">skip</button>
-				</div>
-				<input id="reference-source-input" class="review-input" type="text" placeholder="reference_source，例如 line.csv / fmm.csv" />
-				<textarea id="review-notes" placeholder="notes（整轨审核备注，可留空）"></textarea>
-				<div class="review-actions">
-					<button id="save-review-btn" type="button">保存审核</button>
-					<button id="refresh-review-btn" type="button">刷新当前</button>
-				</div>
-				<div class="review-meta" id="review-meta">当前 decision：未设置</div>
-				<div id="review-aggregate-panel" class="collapsed">
-					<button id="review-aggregate-toggle" class="review-aggregate-header" type="button">
-						<span>多人标注汇总</span>
-						<span id="review-aggregate-toggle-text" class="review-aggregate-toggle-text">展开</span>
-					</button>
-					<div id="review-aggregate-summary" class="review-aggregate-summary">当前 UID 暂无多人摘要</div>
-					<div id="review-aggregate-list" class="review-aggregate-list"></div>
-				</div>
-				<div class="status" id="review-dirty-status">当前内容已保存</div>
-				<div class="status" id="review-status">审核接口：未连接</div>
-			</div>
 			<div id="triage-board-wrap">
 				<div id="triage-board-toolbar">
 					<div id="triage-board-toolbar-left">
@@ -899,10 +1076,67 @@
 		</div>
 		<div id="map-container">
 			<div id="map"></div>
+			<div id="review-panel">
+				<div id="review-panel-head">
+					<div id="review-title-wrap">
+						<div class="review-summary-row">
+							<div id="review-current">请选择 UID 后保存保留 / 排除 / 跳过。</div>
+						</div>
+						<div class="review-meta" id="review-meta">当前 decision：未设置</div>
+					</div>
+					<div class="review-panel-actions">
+						<div class="review-identity-row">
+							<div class="review-identity-text">
+								<div class="review-identity-label">当前标注者</div>
+								<div id="reviewer-identity-value" class="review-identity-value">未设置</div>
+							</div>
+							<button id="reviewer-switch-btn" class="reviewer-switch-btn" type="button">切换</button>
+						</div>
+						<div class="review-nav">
+							<button id="prev-pending-btn" type="button">上一条待审</button>
+							<button id="next-pending-btn" type="button">下一条待审</button>
+						</div>
+						<button id="review-panel-toggle" class="review-panel-toggle" type="button">收起</button>
+					</div>
+				</div>
+				<div id="review-panel-body">
+					<div class="review-decisions">
+						<button type="button" class="review-decision-btn" data-decision="accept">保留</button>
+						<button type="button" class="review-decision-btn" data-decision="reject">排除</button>
+						<button type="button" class="review-decision-btn" data-decision="skip">跳过</button>
+					</div>
+					<div class="review-tag-wrap">
+						<label class="review-inline-label" for="review-tag-select">Tag</label>
+						<select id="review-tag-select" class="review-tag-select" aria-label="整轨标签">
+							<option value="">无标签</option>
+						</select>
+					</div>
+					<input id="review-notes" class="review-note-input" type="text" placeholder="备注，可留空" />
+					<input id="reference-source-input" class="review-input review-input-hidden" type="text" placeholder="reference_source，例如 line.csv / fmm.csv" />
+					<div class="review-actions">
+						<button id="save-review-btn" type="button">保存</button>
+						<button id="refresh-review-btn" type="button">刷新</button>
+					</div>
+				</div>
+				<div id="review-panel-footer">
+					<div class="review-status-row">
+						<div class="status review-status-chip" id="review-dirty-status">当前内容已保存</div>
+						<div class="status review-status-chip" id="review-status">审核接口：未连接</div>
+					</div>
+				</div>
+				<div id="review-aggregate-panel" class="collapsed" aria-hidden="true">
+					<button id="review-aggregate-toggle" class="review-aggregate-header" type="button">
+						<span>多人标注汇总</span>
+						<span id="review-aggregate-toggle-text" class="review-aggregate-toggle-text">展开</span>
+					</button>
+					<div id="review-aggregate-summary" class="review-aggregate-summary">当前 UID 暂无多人摘要</div>
+					<div id="review-aggregate-list" class="review-aggregate-list"></div>
+				</div>
+			</div>
 			<div id="time-plus8-control">
 				<label><input type="checkbox" id="time-plus8-cb" checked> 时间+8</label>
 			</div>
-			<div id="time-scrubber-control" class="hidden" title="拖动时间轴选择当前时间点；左右按钮平移当前时间轴窗口">
+			<div id="time-scrubber-control" class="hidden" title="拖动时间轴选择当前时间点；右上 <> 切换时间点；下方左右按钮平移当前时间轴窗口">
 				<div id="time-scrubber-header">
 					<select id="time-scrubber-layer-select" aria-label="当前时间轴图层"></select>
 					<div id="time-scrubber-meta">
@@ -910,6 +1144,8 @@
 						<div id="time-scrubber-range">当前日期区间内暂无可定位时间点</div>
 					</div>
 					<div id="time-scrubber-header-actions">
+						<button id="time-scrubber-step-prev" class="time-scrubber-action-btn" type="button" title="上一时间点（左方向键）">&lt;</button>
+						<button id="time-scrubber-step-next" class="time-scrubber-action-btn" type="button" title="下一时间点（右方向键）">&gt;</button>
 						<button id="time-scrubber-zoom-out" class="time-scrubber-action-btn" type="button" title="扩大时间范围">−</button>
 						<button id="time-scrubber-zoom-in" class="time-scrubber-action-btn" type="button" title="缩小时间范围">+</button>
 					</div>
@@ -951,7 +1187,7 @@
 							<span class="help-header-icon" aria-hidden="true">
 								<svg viewBox="0 0 24 24"><path d="M4 5.5C4 4.67 4.67 4 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5V5.5Z"></path><path d="M20 5.5C20 4.67 19.33 4 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5V5.5Z"></path></svg>
 							</span>
-							<span class="help-header-text">说明</span>
+							<span class="help-header-text">提示</span>
 						</span>
 						<button id="help-toggle-btn" type="button">+</button>
 					</div>
@@ -960,7 +1196,7 @@
 					<ul>
 						<li>点击地图上的点可查看该点的<strong>状态</strong>和<strong>时间</strong></li>
 						<li><strong>时间标签常显</strong>：右下角图层面板现在支持按图层开启“标签常显”，勾选后无需点击，直接在地图上展示该图层的时间/停留信息</li>
-						<li><strong>时间轴增强</strong>：滚轮可低敏缩放时间范围；全时间条支持拖动窗口、拖拽边缘改范围；在时间轴上右键可给当前时间点打单点标签或启动段落标记</li>
+						<li><strong>时间轴增强</strong>：滚轮可低敏缩放时间范围；右上 <strong>&lt; / &gt;</strong> 或键盘 <strong>← / →</strong> 可逐点移动光标；全时间条支持拖动窗口、拖拽边缘改范围；在时间轴上右键可给当前时间点打单点标签或启动段落标记</li>
 						<li><strong>三列审阅箱</strong>：左侧按“待审 / 已通过 / 未通过或跳过”分栏展示 UID，点击任意卡片即可切换轨迹并加载 latest review</li>
 						<li><strong>筛选</strong>：搜索框同时匹配 UID、当前标注者 notes 和状态词；状态筛选支持 road/subway/railway/unmatch/stay 的任一命中或全部命中</li>
 						<li><strong>编辑与流转</strong>：已审 UID 再次打开后可直接修改并保存；保存后默认跳到当前筛选结果中的下一条待审 UID</li>
@@ -988,7 +1224,7 @@
 					<span class="floating-action-icon" aria-hidden="true">
 						<svg viewBox="0 0 24 24"><path d="M12 8.5A3.5 3.5 0 1 0 12 15.5A3.5 3.5 0 1 0 12 8.5Z"></path><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83a2 2 0 0 1-2.83 0l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6a1.65 1.65 0 0 0-.33 1V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-.33-1a1.65 1.65 0 0 0-1-.6a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0a2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1a1.65 1.65 0 0 0-1-.33H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1-.33a1.65 1.65 0 0 0 .6-1a1.65 1.65 0 0 0-.33-1.82L4.3 6.46a2 2 0 0 1 0-2.83a2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6a1.65 1.65 0 0 0 .33-1V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 .33 1a1.65 1.65 0 0 0 1 .6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0a2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c0 .39.14.76.4 1a1.65 1.65 0 0 0 1 .33H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1 .33a1.65 1.65 0 0 0-.51.34Z"></path></svg>
 					</span>
-					<span>标注设置</span>
+					<span>设置</span>
 				</button>
 			</div>
 			<div id="time-scrubber-context-menu" aria-hidden="true">
@@ -1009,6 +1245,12 @@
 							<p>这些类别会直接出现在时间轴右键菜单里，用来发起“开始段落标记”。</p>
 							<div id="annotation-category-list"></div>
 							<button id="annotation-category-add" class="annotation-settings-add" type="button">新增类别</button>
+						</section>
+						<section class="annotation-settings-section">
+							<h4>整轨 Tag</h4>
+							<p>这些 tag 会出现在顶部整轨标注条的下拉选单里，作为当前用户的常用标签池。</p>
+							<div id="annotation-tag-list"></div>
+							<button id="annotation-tag-add" class="annotation-settings-add" type="button">新增 Tag</button>
 						</section>
 						<section class="annotation-settings-section">
 							<h4>时间轴透明度</h4>
@@ -1108,6 +1350,18 @@
 			return JSON.parse(JSON.stringify(value));
 		}
 
+		function dedupePreserveOrder(items) {
+			const seen = new Set();
+			const result = [];
+			(items || []).forEach(item => {
+				const value = String(item || "").trim();
+				if (!value || seen.has(value)) return;
+				seen.add(value);
+				result.push(value);
+			});
+			return result;
+		}
+
 		const CHAIN2_TRIAGE_COLUMNS = [
 			{ key: "pending", title: "待审", subtitle: "还没有 latest review" },
 			{ key: "accept", title: "已通过", subtitle: "latest decision = accept" },
@@ -1116,7 +1370,7 @@
 		const CHAIN2_UI_PRESET = {
 			mode: "chain2",
 			title: "信令轨迹演示与调试预览",
-			searchPlaceholder: "搜索 UID / 当前 notes / 状态...",
+			searchPlaceholder: "搜索 UID / tag / 当前 notes / 状态...",
 			filterTitle: "按状态筛选 UID（来源: fmm/line/od）",
 			filterStateOptions: ["road", "subway", "railway", "unmatch", "stay"],
 			pointStatusTypes: ["road", "subway", "railway", "unmatch", "stay"],
@@ -1139,6 +1393,7 @@
 			layerLabels: { raw: "raw", snap: "snap", od: "od", fmm: "fmm", line: "line" },
 			triageColumns: CHAIN2_TRIAGE_COLUMNS,
 			hideReviewPanel: false,
+			annotationEnabled: true,
 			statusStyleTitle: "状态样式（fmm/line 点）",
 			helpContentHtml: `
 				<h5>交互</h5>
@@ -1174,14 +1429,14 @@
 		const SIM_SIGNAL_UI_PRESET = {
 			mode: "sim_signal",
 			title: "模拟信令轨迹演示与调试预览",
-			searchPlaceholder: "搜索 UID / 当前 notes / 状态...",
+			searchPlaceholder: "搜索 UID / tag / 当前 notes / 状态...",
 			filterTitle: "按状态筛选 UID（来源: GPS 状态 + 模拟切换特征）",
 			filterStateOptions: ["stay", "walking", "bicycling", "driving", "ping_pong", "long_jump"],
 			pointStatusTypes: ["stay", "walking", "bicycling", "driving"],
 			layerOrder: ["gps", "signal", "stations"],
 			layerConfig: {
-				gps: { defaultColor: "#1565c0", defaultOpacity: 0.7, hasLine: true, dashArray: null, kind: "gps" },
-				signal: { defaultColor: "#e65100", defaultOpacity: 0.72, hasLine: true, dashArray: null, kind: "signal" },
+				gps: { defaultColor: "#1565c0", defaultOpacity: 0.7, hasLine: true, dashArray: null, kind: "gps", review_reference: true },
+				signal: { defaultColor: "#e65100", defaultOpacity: 0.72, hasLine: true, dashArray: null, kind: "signal", review_reference: true },
 				stations: { defaultColor: "#5d4037", defaultOpacity: 0.85, hasLine: false, kind: "stations", pointRadius: 4 }
 			},
 			layerVisibility: { gps: true, signal: true, stations: false },
@@ -1192,15 +1447,15 @@
 				driving: { color: "#c62828", size: 4 }
 			},
 			layerLabels: { gps: "GPS", signal: "模拟信令", stations: "基站" },
-			triageColumns: [
-				{ key: "pending", title: "样本列表", subtitle: "点击切换 GPS / 模拟信令 / 基站图层" }
-			],
-			hideReviewPanel: true,
+			triageColumns: CHAIN2_TRIAGE_COLUMNS,
+			hideReviewPanel: false,
+			annotationEnabled: true,
 			statusStyleTitle: "状态样式（GPS 点）",
 			helpContentHtml: `
 				<h5>交互</h5>
 				<ul>
 					<li>点击左侧样本卡片即可切换 UID，并在地图上叠加查看 GPS、模拟信令和基站位置</li>
+					<li><strong>整轨标注</strong>：顶部标注栏支持保留 / 排除 / 跳过、Tag 与备注，保存后会按待审队列自动流转</li>
 					<li><strong>筛选</strong>：搜索框匹配 UID；状态筛选支持 stay/walking/bicycling/driving，以及模拟切换特征 ping_pong / long_jump</li>
 					<li><strong>时间轴</strong>：日期区间条上方新增拖动式时间轴；默认聚焦一层，拖动后会在地图上浮起当前时间点的信息气泡，滚轮/缩放键可调整时间窗</li>
 					<li><strong>标签标注</strong>：时间轴右键可打单点标签，也可以按“标注设置”里定义的类别启动段落标记</li>
@@ -1217,6 +1472,51 @@
 					<strong>stay / walking / bicycling / driving</strong>：来自输入 GPS 的状态标签<br>
 					<strong>ping_pong</strong>：检测到 A→B→A 形式的来回切换<br>
 					<strong>long_jump</strong>：相邻信令点位之间出现较大的空间跃迁
+				</div>
+			`
+		};
+		const TRAJECTORY_LAYERS_UI_PRESET = {
+			mode: "trajectory_layers",
+			title: "轨迹多图层对照预览",
+			searchPlaceholder: "搜索 UID / tag / sample_id / 备注...",
+			filterTitle: "按多图层轨迹样本筛选",
+			filterStateOptions: [],
+			pointStatusTypes: [],
+			layerOrder: ["gps", "tier1", "tier2", "tier3", "tier4"],
+			layerConfig: {
+				gps: { defaultColor: "#0f766e", defaultOpacity: 0.85, hasLine: true, dashArray: null, kind: "gps", review_reference: true },
+				tier1: { defaultColor: "#475569", defaultOpacity: 0.72, hasLine: true, dashArray: "2,4", kind: "signal" },
+				tier2: { defaultColor: "#2563eb", defaultOpacity: 0.72, hasLine: true, dashArray: "3,3", kind: "signal" },
+				tier3: { defaultColor: "#ea580c", defaultOpacity: 0.78, hasLine: true, dashArray: null, kind: "signal" },
+				tier4: { defaultColor: "#7c3aed", defaultOpacity: 0.82, hasLine: true, dashArray: null, kind: "signal", review_reference: true }
+			},
+			layerVisibility: { gps: true, tier1: true, tier2: true, tier3: true, tier4: true },
+			pointStatusStyles: {},
+			layerLabels: {
+				gps: "GPS 真值",
+				tier1: "Tier-1",
+				tier2: "Tier-2",
+				tier3: "Tier-3",
+				tier4: "Tier-4"
+			},
+			triageColumns: CHAIN2_TRIAGE_COLUMNS,
+			hideReviewPanel: false,
+			annotationEnabled: true,
+			statusStyleTitle: "状态样式",
+			helpContentHtml: `
+				<h5>交互</h5>
+				<ul>
+					<li>左侧点击任意样本后，地图会叠加展示同一条轨迹的 GPS 与 4 个 tier 图层</li>
+					<li><strong>整轨标注</strong>：顶部标注栏支持保留 / 排除 / 跳过、Tag 与备注，适合在多层对照时直接给整条轨迹下结论</li>
+					<li><strong>标签标注</strong>：时间轴右键可打单点标签，也可以按“标注设置”里定义的类别启动段落标记</li>
+					<li><strong>图层顺序</strong>：右下角面板可调整显隐、颜色、透明度和顺序，适合观察从 starter 到 realistic 的递进差异</li>
+					<li><strong>时间轴</strong>：默认优先跟随 GPS 或当前可定位图层，可拖动查看同一时刻不同图层的落点差异</li>
+					<li><strong>原始 6 元组</strong>：tier 图层可直接承载 <code>uid/cid/lat/lon/t_in/t_out</code> 这类原始事件流，不要求先转成旧版 raw/snap/fmm 文件族</li>
+				</ul>
+				<h5>图层含义</h5>
+				<div class="layer-desc">
+					<strong>GPS</strong>：组织者保留的真值轨迹<br>
+					<strong>Tier-1 ~ Tier-4</strong>：同一条真值轨迹在不同仿真真实度下生成的 raw 6 元组信令层
 				</div>
 			`
 		};
@@ -1244,14 +1544,44 @@
 			{ id: "review-segment", name: "待复核", color: "#f59e0b" },
 			{ id: "abnormal-segment", name: "异常段", color: "#f97316" },
 		];
+		const DEFAULT_LAYER_COLOR_PALETTE = [
+			"#0f766e",
+			"#2563eb",
+			"#ea580c",
+			"#0891b2",
+			"#7c3aed",
+			"#16a34a",
+			"#dc2626",
+			"#b45309",
+			"#475569",
+			"#be185d",
+			"#4f46e5",
+			"#0d9488",
+		];
+		const DEFAULT_REVIEW_TAG_OPTIONS = [];
+		const REVIEW_DECISION_LABELS = {
+			accept: "保留",
+			reject: "排除",
+			skip: "跳过",
+		};
+		const SHOW_REVIEW_AGGREGATE = false;
 		let currentUiMode = QUERY.get("uiMode") || "chain2";
-		let currentUiConfig = deepClone(currentUiMode === "sim_signal" ? SIM_SIGNAL_UI_PRESET : CHAIN2_UI_PRESET);
+		let currentUiConfig = deepClone(
+			currentUiMode === "sim_signal"
+				? SIM_SIGNAL_UI_PRESET
+				: currentUiMode === "trajectory_layers"
+					? TRAJECTORY_LAYERS_UI_PRESET
+					: CHAIN2_UI_PRESET
+		);
 		let filterStateOptions = [...currentUiConfig.filterStateOptions];
 		let pointStatusTypes = [...currentUiConfig.pointStatusTypes];
 		let layerConfig = deepClone(currentUiConfig.layerConfig);
 		let layerLabels = deepClone(currentUiConfig.layerLabels);
 		let layerOrder = [...currentUiConfig.layerOrder];
 		let triageColumns = deepClone(currentUiConfig.triageColumns);
+		let currentLayerFileMap = Object.fromEntries(layerOrder.map(layer => [layer, `${layer}.csv`]));
+		let currentReviewReferenceFiles = ["line.csv", "fmm.csv"];
+		let currentTimeScrubberPreferredLayers = [];
 
 		let map = null;
 		let tileLayer = null;
@@ -1291,6 +1621,7 @@
 		let activeTriageColumnKey = triageColumns[0]?.key || "";
 		let reviewAggregateCollapsed = true;
 		let reviewAggregateCollapseTouched = false;
+		let reviewPanelCollapsed = false;
 		let mapToolsOpen = false;
 		let renderedCache = new Map();
 		let renderedCacheKeys = [];
@@ -1420,8 +1751,16 @@
 			const name = getCurrentReviewerName() || "未设置";
 			document.getElementById("current-reviewer-chip").textContent = name;
 			document.getElementById("reviewer-identity-value").textContent = name;
-			document.getElementById("save-review-btn").disabled = !getCurrentReviewerId();
-			document.getElementById("refresh-review-btn").disabled = !currentUid;
+			document.getElementById("save-review-btn").disabled = !getCurrentReviewerId() || currentUiConfig.annotationEnabled === false || currentUiConfig.hideReviewPanel;
+			document.getElementById("refresh-review-btn").disabled = !currentUid || currentUiConfig.annotationEnabled === false || currentUiConfig.hideReviewPanel;
+		}
+
+		function ensureAnnotationSessionReady(options = {}) {
+			if (currentUiConfig.annotationEnabled === false) return false;
+			if (getCurrentReviewerId()) return true;
+			if (options.prompt !== false) openReviewerSessionModal({ required: true });
+			setReviewStatus("请先设置标注者身份", true);
+			return false;
 		}
 
 		function renderKnownReviewerButtons() {
@@ -1461,7 +1800,7 @@
 		}
 
 		async function loadReviewerRegistry() {
-			if (currentUiConfig.hideReviewPanel) {
+			if (currentUiConfig.annotationEnabled === false || currentUiConfig.hideReviewPanel) {
 				reviewerRegistry = [];
 				renderKnownReviewerButtons();
 				return [];
@@ -1504,7 +1843,7 @@
 		}
 
 		async function ensureReviewerSessionReady(options = {}) {
-			if (currentUiConfig.hideReviewPanel) return true;
+			if (currentUiConfig.annotationEnabled === false || currentUiConfig.hideReviewPanel) return true;
 			await loadReviewerRegistry();
 			if (!currentReviewerSession) {
 				if (options.prompt !== false) openReviewerSessionModal({ required: true });
@@ -1537,7 +1876,9 @@
 		}
 
 		function getUiPresetForMode(mode) {
-			return mode === "sim_signal" ? SIM_SIGNAL_UI_PRESET : CHAIN2_UI_PRESET;
+			if (mode === "sim_signal") return SIM_SIGNAL_UI_PRESET;
+			if (mode === "trajectory_layers") return TRAJECTORY_LAYERS_UI_PRESET;
+			return CHAIN2_UI_PRESET;
 		}
 
 		function isSimMode() {
@@ -1558,13 +1899,37 @@
 			document.getElementById("help-content").innerHTML = currentUiConfig.helpContentHtml || "";
 		}
 
+		function getBatchUiConfig(batchMeta = currentBatchMeta) {
+			if (!batchMeta?.ui_config || typeof batchMeta.ui_config !== "object") return {};
+			return batchMeta.ui_config;
+		}
+
+		function setReviewPanelCollapsed(nextCollapsed) {
+			reviewPanelCollapsed = !!nextCollapsed;
+			const panel = document.getElementById("review-panel");
+			const toggle = document.getElementById("review-panel-toggle");
+			if (panel) panel.classList.toggle("collapsed", reviewPanelCollapsed);
+			if (toggle) toggle.textContent = reviewPanelCollapsed ? "展开" : "收起";
+		}
+
 		function applyUiChrome() {
+			const annotationEnabled = currentUiConfig.annotationEnabled !== false;
+			const showReviewPanel = annotationEnabled && !currentUiConfig.hideReviewPanel;
 			document.title = currentUiConfig.title || "轨迹预览";
 			document.getElementById("sidebar-title").textContent = currentUiConfig.title || "轨迹预览";
 			document.getElementById("filter-panel-title").textContent = currentUiConfig.filterTitle || "按状态筛选 UID";
 			document.getElementById("status-style-title").textContent = currentUiConfig.statusStyleTitle || "状态样式";
 			document.getElementById("search-box").placeholder = currentUiConfig.searchPlaceholder || "搜索 UID...";
-			document.getElementById("review-panel").style.display = currentUiConfig.hideReviewPanel ? "none" : "";
+			document.getElementById("review-panel").style.display = showReviewPanel ? "" : "none";
+			document.getElementById("review-aggregate-panel").style.display = SHOW_REVIEW_AGGREGATE && showReviewPanel ? "" : "none";
+			document.getElementById("annotation-settings-entry").style.display = annotationEnabled ? "" : "none";
+			document.getElementById("reviewer-badge-row").style.display = annotationEnabled ? "" : "none";
+			if (!annotationEnabled) {
+				hideTimeScrubberContextMenu();
+				closeAnnotationSettings();
+			}
+			setReviewPanelCollapsed(reviewPanelCollapsed);
+			renderReviewerIdentity();
 			renderHelpContent();
 			renderFilterPanelChrome();
 			syncReviewAggregateChrome(currentUidAggregate);
@@ -1614,6 +1979,7 @@
 		}
 
 		function syncReviewAggregateChrome(aggregate = null) {
+			if (!SHOW_REVIEW_AGGREGATE) return;
 			const reviewerCount = Number(aggregate?.reviewer_count || 0);
 			if (!reviewAggregateCollapseTouched) {
 				setReviewAggregateCollapsed(reviewerCount <= 1, { userInitiated: false });
@@ -1647,6 +2013,7 @@
 			if (idleValue) idleValue.textContent = `${Math.round(annotationSettings.idleOpacity * 100)}%`;
 			const previewSegment = document.getElementById("annotation-preview-segment");
 			if (previewSegment) previewSegment.style.background = annotationSettings.categories[0]?.color || "#60a5fa";
+			renderReviewTagOptions(getSelectedReviewTag());
 			renderTimeScrubberContextMenuItems();
 		}
 
@@ -1717,12 +2084,55 @@
 			});
 		}
 
+		function renderAnnotationTagList() {
+			const list = document.getElementById("annotation-tag-list");
+			if (!list) return;
+			list.innerHTML = annotationSettings.reviewTags.length ? annotationSettings.reviewTags.map((tag, index) => `
+				<div class="annotation-tag-row" data-tag-index="${index}">
+					<input class="annotation-tag-name" data-field="name" type="text" value="${escapeHtml(tag)}" placeholder="Tag ${index + 1}" />
+					<button class="annotation-tag-delete" data-action="delete" type="button">删除</button>
+				</div>
+			`).join("") : `<div class="review-aggregate-empty">当前还没有整轨 tag，可在这里新增。</div>`;
+
+			list.querySelectorAll(".annotation-tag-row").forEach(row => {
+				const index = Number(row.dataset.tagIndex || -1);
+				row.querySelector('[data-field="name"]').addEventListener("input", (event) => {
+					if (index < 0 || index >= annotationSettings.reviewTags.length) return;
+					annotationSettings.reviewTags[index] = String(event.target.value || "").trimStart();
+					persistAnnotationSettings();
+					renderReviewTagOptions(getSelectedReviewTag());
+					syncReviewDirtyState();
+				});
+				row.querySelector('[data-field="name"]').addEventListener("change", (event) => {
+					if (index < 0 || index >= annotationSettings.reviewTags.length) return;
+					annotationSettings.reviewTags[index] = String(event.target.value || "").trimStart();
+					annotationSettings = normalizeAnnotationSettings(annotationSettings);
+					persistAnnotationSettings();
+					renderAnnotationTagList();
+					renderReviewTagOptions(getSelectedReviewTag());
+					syncReviewDirtyState();
+				});
+				row.querySelector('[data-action="delete"]').addEventListener("click", () => {
+					if (index < 0 || index >= annotationSettings.reviewTags.length) return;
+					const removedTag = annotationSettings.reviewTags[index];
+					annotationSettings.reviewTags = annotationSettings.reviewTags.filter((_, itemIndex) => itemIndex !== index);
+					annotationSettings = normalizeAnnotationSettings(annotationSettings);
+					persistAnnotationSettings();
+					if (getSelectedReviewTag() === removedTag) renderReviewTagOptions("");
+					renderAnnotationTagList();
+					renderReviewTagOptions(getSelectedReviewTag());
+					syncReviewDirtyState();
+				});
+			});
+		}
+
 		function openAnnotationSettings() {
 			const overlay = document.getElementById("annotation-settings-overlay");
 			hideTimeScrubberContextMenu();
 			overlay.classList.add("open");
 			overlay.setAttribute("aria-hidden", "false");
 			renderAnnotationCategoryList();
+			renderAnnotationTagList();
 			applyAnnotationUiSettings();
 		}
 
@@ -1733,43 +2143,128 @@
 		}
 
 		function applyManifestUiConfig(manifest = null) {
-			const requestedMode = String(manifest?.ui_mode || QUERY.get("uiMode") || currentUiMode || "chain2").trim().toLowerCase();
-			const mode = requestedMode === "sim_signal" ? "sim_signal" : "chain2";
+			const batchUiConfig = getBatchUiConfig();
+			const requestedMode = String(
+				batchUiConfig?.ui_mode || manifest?.ui_mode || QUERY.get("uiMode") || currentUiMode || "chain2"
+			).trim().toLowerCase();
+			const mode = requestedMode === "sim_signal"
+				? "sim_signal"
+				: requestedMode === "trajectory_layers"
+					? "trajectory_layers"
+					: "chain2";
 			const preset = deepClone(getUiPresetForMode(mode));
 			currentUiMode = mode;
-			currentUiConfig = preset;
+			currentUiConfig = deepClone(preset);
+			currentUiConfig.mode = mode;
 
-			const nextLayerOrder = Array.isArray(manifest?.layers) && manifest.layers.length
-				? manifest.layers.map(item => String(item || "").trim()).filter(Boolean)
-				: preset.layerOrder;
+			const manifestLayerSpecs = manifest?.layer_specs && typeof manifest.layer_specs === "object" ? manifest.layer_specs : {};
+			const batchLayerSpecs = batchUiConfig?.layer_specs && typeof batchUiConfig.layer_specs === "object" ? batchUiConfig.layer_specs : {};
 			const manifestLayerConfig = manifest?.layer_styles && typeof manifest.layer_styles === "object" ? manifest.layer_styles : {};
+			const batchLayerConfig = batchUiConfig?.layer_styles && typeof batchUiConfig.layer_styles === "object" ? batchUiConfig.layer_styles : {};
+			const configuredLayers = Array.isArray(batchUiConfig?.layers) && batchUiConfig.layers.length
+				? batchUiConfig.layers
+				: Array.isArray(manifest?.layers) && manifest.layers.length
+					? manifest.layers
+					: Object.keys(batchLayerSpecs).length
+						? Object.keys(batchLayerSpecs)
+						: Object.keys(batchLayerConfig).length
+							? Object.keys(batchLayerConfig)
+							: Object.keys(manifestLayerSpecs).length
+								? Object.keys(manifestLayerSpecs)
+								: Object.keys(manifestLayerConfig).length
+									? Object.keys(manifestLayerConfig)
+									: preset.layerOrder;
+			const nextLayerOrder = dedupePreserveOrder(configuredLayers);
 			const mergedLayerConfig = {};
-			nextLayerOrder.forEach(layer => {
+			nextLayerOrder.forEach((layer, index) => {
+				const fallbackColor = getFallbackLayerColor(layer, index);
 				mergedLayerConfig[layer] = {
-					defaultColor: "#607d8b",
+					defaultColor: fallbackColor,
 					defaultOpacity: 0.7,
 					hasLine: true,
 					kind: "default",
 					...(preset.layerConfig[layer] || {}),
+					...(manifestLayerSpecs[layer] || {}),
 					...(manifestLayerConfig[layer] || {}),
+					...(batchLayerSpecs[layer] || {}),
+					...(batchLayerConfig[layer] || {}),
 				};
+				const mergedCfg = mergedLayerConfig[layer];
+				const normalizedKind = String(mergedCfg.kind || "default").trim().toLowerCase() || "default";
+				const hasExplicitHasLine = Object.prototype.hasOwnProperty.call(preset.layerConfig[layer] || {}, "hasLine")
+					|| Object.prototype.hasOwnProperty.call(manifestLayerSpecs[layer] || {}, "hasLine")
+					|| Object.prototype.hasOwnProperty.call(manifestLayerConfig[layer] || {}, "hasLine")
+					|| Object.prototype.hasOwnProperty.call(batchLayerSpecs[layer] || {}, "hasLine")
+					|| Object.prototype.hasOwnProperty.call(batchLayerConfig[layer] || {}, "hasLine");
+				mergedCfg.defaultColor = /^#[0-9a-f]{6}$/i.test(String(mergedCfg.defaultColor || "").trim())
+					? String(mergedCfg.defaultColor).trim()
+					: fallbackColor;
+				mergedCfg.defaultOpacity = Math.max(0.15, Math.min(1, parseNumericValue(mergedCfg.defaultOpacity) ?? 0.7));
+				mergedCfg.kind = normalizedKind;
+				if (normalizedKind === "od") {
+					mergedCfg.isOD = true;
+					if (!hasExplicitHasLine) mergedCfg.hasLine = false;
+				}
 			});
+			currentLayerFileMap = Object.fromEntries(
+				nextLayerOrder.map(layer => {
+					const configured = String(mergedLayerConfig[layer]?.filename || `${layer}.csv`).trim() || `${layer}.csv`;
+					mergedLayerConfig[layer].filename = configured;
+					return [layer, configured];
+				})
+			);
+			const configuredReviewReferenceFiles = Array.isArray(batchUiConfig?.review_reference_files)
+				? batchUiConfig.review_reference_files
+				: Array.isArray(manifest?.review_reference_files)
+					? manifest.review_reference_files
+					: [];
+			const configuredReviewReferenceLayers = Array.isArray(batchUiConfig?.review_reference_layers)
+				? batchUiConfig.review_reference_layers
+				: Array.isArray(manifest?.review_reference_layers)
+					? manifest.review_reference_layers
+					: [];
+			const reviewReferenceFiles = dedupePreserveOrder([
+				...(configuredReviewReferenceFiles),
+				...(configuredReviewReferenceLayers.map(layer => currentLayerFileMap[layer] || "")),
+				...nextLayerOrder
+					.filter(layer => !!mergedLayerConfig[layer]?.review_reference)
+					.map(layer => currentLayerFileMap[layer] || ""),
+			]);
+			const hasExplicitReviewReferenceConfig = Array.isArray(batchUiConfig?.review_reference_files)
+				|| Array.isArray(batchUiConfig?.review_reference_layers)
+				|| Array.isArray(manifest?.review_reference_files)
+				|| Array.isArray(manifest?.review_reference_layers)
+				|| nextLayerOrder.some(layer => mergedLayerConfig[layer]?.review_reference);
+			currentReviewReferenceFiles = hasExplicitReviewReferenceConfig
+				? reviewReferenceFiles
+				: ["line.csv", "fmm.csv"];
+			currentTimeScrubberPreferredLayers = Array.isArray(batchUiConfig?.time_scrubber_preferred_layers)
+				? batchUiConfig.time_scrubber_preferred_layers.map(item => String(item || "").trim()).filter(Boolean)
+				: Array.isArray(manifest?.time_scrubber_preferred_layers)
+					? manifest.time_scrubber_preferred_layers.map(item => String(item || "").trim()).filter(Boolean)
+				: [];
 
 			currentUiConfig.layerOrder = nextLayerOrder;
-			currentUiConfig.filterStateOptions = Array.isArray(manifest?.filter_state_options) && manifest.filter_state_options.length
-				? manifest.filter_state_options.map(item => String(item || "").trim()).filter(Boolean)
+			currentUiConfig.filterStateOptions = Array.isArray(batchUiConfig?.filter_state_options) && batchUiConfig.filter_state_options.length
+				? batchUiConfig.filter_state_options.map(item => String(item || "").trim()).filter(Boolean)
+				: Array.isArray(manifest?.filter_state_options) && manifest.filter_state_options.length
+					? manifest.filter_state_options.map(item => String(item || "").trim()).filter(Boolean)
 				: preset.filterStateOptions;
-			currentUiConfig.pointStatusTypes = Array.isArray(manifest?.point_status_types) && manifest.point_status_types.length
-				? manifest.point_status_types.map(item => String(item || "").trim()).filter(Boolean)
+			currentUiConfig.pointStatusTypes = Array.isArray(batchUiConfig?.point_status_types) && batchUiConfig.point_status_types.length
+				? batchUiConfig.point_status_types.map(item => String(item || "").trim()).filter(Boolean)
+				: Array.isArray(manifest?.point_status_types) && manifest.point_status_types.length
+					? manifest.point_status_types.map(item => String(item || "").trim()).filter(Boolean)
 				: preset.pointStatusTypes;
 			currentUiConfig.layerLabels = {
 				...preset.layerLabels,
 				...(manifest?.layer_labels && typeof manifest.layer_labels === "object" ? manifest.layer_labels : {}),
+				...(batchUiConfig?.layer_labels && typeof batchUiConfig.layer_labels === "object" ? batchUiConfig.layer_labels : {}),
 			};
 			currentUiConfig.layerConfig = mergedLayerConfig;
 			currentUiConfig.layerVisibility = {
 				...preset.layerVisibility,
 				...(manifest?.layer_visibility && typeof manifest.layer_visibility === "object" ? manifest.layer_visibility : {}),
+				...(batchUiConfig?.layer_visibility && typeof batchUiConfig.layer_visibility === "object" ? batchUiConfig.layer_visibility : {}),
 			};
 			currentUiConfig.pointStatusStyles = deepClone(preset.pointStatusStyles);
 			if (manifest?.point_status_styles && typeof manifest.point_status_styles === "object") {
@@ -1780,8 +2275,38 @@
 					};
 				});
 			}
-			currentUiConfig.title = manifest?.title || preset.title;
-			const filterSource = String(manifest?.filter_source_label || "").trim();
+			if (batchUiConfig?.point_status_styles && typeof batchUiConfig.point_status_styles === "object") {
+				Object.entries(batchUiConfig.point_status_styles).forEach(([key, value]) => {
+					currentUiConfig.pointStatusStyles[key] = {
+						...(currentUiConfig.pointStatusStyles[key] || { color: "#546e7a", size: 4 }),
+						...(value || {}),
+					};
+				});
+			}
+			currentUiConfig.title = batchUiConfig?.title || manifest?.title || preset.title;
+			currentUiConfig.searchPlaceholder = batchUiConfig?.search_placeholder || manifest?.search_placeholder || preset.searchPlaceholder;
+			currentUiConfig.filterTitle = batchUiConfig?.filter_title || manifest?.filter_title || preset.filterTitle;
+			currentUiConfig.statusStyleTitle = batchUiConfig?.status_style_title || manifest?.status_style_title || preset.statusStyleTitle;
+			currentUiConfig.hideReviewPanel = false;
+			currentUiConfig.annotationEnabled = true;
+			currentUiConfig.helpContentHtml = batchUiConfig?.help_content_html || manifest?.help_content_html || preset.helpContentHtml;
+			const configuredTriageColumns = Array.isArray(batchUiConfig?.triage_columns) && batchUiConfig.triage_columns.length
+				? batchUiConfig.triage_columns
+				: Array.isArray(manifest?.triage_columns) && manifest.triage_columns.length
+					? manifest.triage_columns
+					: null;
+			currentUiConfig.triageColumns = configuredTriageColumns
+				? configuredTriageColumns.map((item, index) => ({
+					key: String(item?.key || `column_${index + 1}`).trim() || `column_${index + 1}`,
+					title: String(item?.title || `列 ${index + 1}`).trim() || `列 ${index + 1}`,
+					subtitle: String(item?.subtitle || "").trim(),
+				}))
+				: preset.triageColumns;
+			const triageColumnKeySet = new Set((currentUiConfig.triageColumns || []).map(item => item.key));
+			if (!triageColumnKeySet.has("pending") || !triageColumnKeySet.has("accept") || !triageColumnKeySet.has("other")) {
+				currentUiConfig.triageColumns = deepClone(CHAIN2_TRIAGE_COLUMNS);
+			}
+			const filterSource = String(batchUiConfig?.filter_source_label || manifest?.filter_source_label || "").trim();
 			if (filterSource) {
 				currentUiConfig.filterTitle = `按状态筛选 UID（来源: ${filterSource}）`;
 			}
@@ -1962,11 +2487,13 @@
 		}
 
 		function getCurrentFormState() {
+			const selectedTag = getSelectedReviewTag();
 			return {
 				decision: selectedDecision || "",
 				reviewer_id: getCurrentReviewerId(),
 				reference_source: document.getElementById("reference-source-input").value.trim(),
-				notes: document.getElementById("review-notes").value.trim()
+				notes: document.getElementById("review-notes").value.trim(),
+				trajectory_tags: selectedTag ? [selectedTag] : [],
 			};
 		}
 
@@ -2000,7 +2527,7 @@
 		}
 
 		function getReviewBucketKey(uid) {
-			if (currentUiConfig.hideReviewPanel) return triageColumns[0]?.key || "pending";
+			if (currentUiConfig.annotationEnabled === false || currentUiConfig.hideReviewPanel) return triageColumns[0]?.key || "pending";
 			const review = getReviewForUid(uid);
 			if (!review || !review.decision) return "pending";
 			if (review.decision === "accept") return "accept";
@@ -2015,19 +2542,24 @@
 		}
 
 		function getPreferredReferenceSource(exists) {
+			for (const [layer, filename] of Object.entries(currentLayerFileMap || {})) {
+				if (!currentReviewReferenceFiles.includes(filename)) continue;
+				if (exists?.[layer]) return filename;
+			}
+			if (Array.isArray(currentReviewReferenceFiles) && currentReviewReferenceFiles.length === 0) return "";
 			if (exists?.line) return "line.csv";
 			if (exists?.fmm) return "fmm.csv";
 			return "";
 		}
 
 		function getReviewBadgeHtml(review) {
-			if (currentUiConfig.hideReviewPanel) return "";
+			if (currentUiConfig.annotationEnabled === false || currentUiConfig.hideReviewPanel) return "";
 			if (!review || !review.decision) return "";
-			return `<span class="review-badge ${escapeHtml(review.decision)}">${escapeHtml(review.decision)}</span>`;
+			return `<span class="review-badge ${escapeHtml(review.decision)}">${escapeHtml(getReviewDecisionLabel(review.decision))}</span>`;
 		}
 
 		function buildReviewCardMetaHtml(uid) {
-			if (currentUiConfig.hideReviewPanel) {
+			if (currentUiConfig.annotationEnabled === false || currentUiConfig.hideReviewPanel) {
 				const states = [...(getUidStatesFromPrecomputed(uid) || new Set())];
 				const summary = states.length ? states.join(" / ") : "无预计算状态";
 				return `<div class="triage-card-meta">${escapeHtml(summary)}</div>`;
@@ -2038,14 +2570,21 @@
 			const reviewerName = review.reviewer_name || review.reviewer || review.reviewer_id || "";
 			const reviewerCount = Number(reviewIndex?.aggregate_counts_by_uid?.[uid] || 0);
 			const summary = [timestamp, reviewerName].filter(Boolean).join(" | ");
+			const tags = getReviewTags(review);
+			const tagLine = tags.length ? `<div class="triage-card-meta">Tag：${escapeHtml(tags.join(" / "))}</div>` : "";
 			const notes = review.notes ? `<div class="triage-card-note">${escapeHtml(review.notes)}</div>` : "";
 			return `
-				<div class="triage-card-meta">${escapeHtml(summary || timestamp)}${reviewerCount > 1 ? ` | ${reviewerCount} reviewers` : ""}</div>
+				<div class="triage-card-meta">${escapeHtml(summary || timestamp)}${reviewerCount > 1 ? ` | 多人 ${reviewerCount}` : ""}</div>
+				${tagLine}
 				${notes}
 			`;
 		}
 
 		function renderReviewAggregatePanel(aggregate = null) {
+			if (!SHOW_REVIEW_AGGREGATE) {
+				currentUidAggregate = null;
+				return;
+			}
 			const summaryEl = document.getElementById("review-aggregate-summary");
 			const listEl = document.getElementById("review-aggregate-list");
 			currentUidAggregate = aggregate || null;
@@ -2059,7 +2598,7 @@
 			const decisionCounts = aggregate.decision_counts || {};
 			const reviewerCount = Number(aggregate.reviewer_count || latestReviews.length || 0);
 			summaryEl.textContent = reviewerCount
-				? `已参与 reviewer ${reviewerCount} 人 | accept ${decisionCounts.accept || 0} / reject ${decisionCounts.reject || 0} / skip ${decisionCounts.skip || 0}`
+				? `已参与 ${reviewerCount} 人 | 保留 ${decisionCounts.accept || 0} / 排除 ${decisionCounts.reject || 0} / 跳过 ${decisionCounts.skip || 0}`
 				: "当前 UID 暂无多人摘要";
 			if (!latestReviews.length) {
 				listEl.innerHTML = `<div class="review-aggregate-empty">暂无 reviewer 审核记录</div>`;
@@ -2075,6 +2614,8 @@
 					? ` | pin ${timeline.pin_count || 0} / segment ${timeline.segment_count || 0}`
 					: "";
 				const referenceText = item.reference_source ? ` | ${item.reference_source}` : "";
+				const tagText = getReviewTags(item).join(" / ");
+				const tagHtml = tagText ? `<div class="review-aggregate-note">Tag：${escapeHtml(tagText)}</div>` : "";
 				const notes = item.notes ? `<div class="review-aggregate-note">${escapeHtml(item.notes)}</div>` : "";
 				return `
 					<div class="review-aggregate-item">
@@ -2083,6 +2624,7 @@
 							<div>${getReviewBadgeHtml(item)}</div>
 						</div>
 						<div class="review-aggregate-meta">${escapeHtml(formatReviewTimestamp(item.timestamp) || "-")}${escapeHtml(referenceText)}${escapeHtml(timelineText)}</div>
+						${tagHtml}
 						${notes}
 					</div>
 				`;
@@ -2091,7 +2633,7 @@
 		}
 
 		async function loadReviewAggregateForUid(uid) {
-			if (!uid || currentUiConfig.hideReviewPanel || !reviewApiAvailable) {
+			if (!SHOW_REVIEW_AGGREGATE || !uid || currentUiConfig.annotationEnabled === false || currentUiConfig.hideReviewPanel || !reviewApiAvailable) {
 				renderReviewAggregatePanel(null);
 				return;
 			}
@@ -2111,33 +2653,36 @@
 			const meta = document.getElementById("review-meta");
 			const uidText = currentUid ? `UID：${currentUid}` : "UID：未选择";
 			const reviewerName = getCurrentReviewerName() || "-";
-			const aggregateText = currentUidAggregate?.reviewer_count
+			const aggregateText = SHOW_REVIEW_AGGREGATE && currentUidAggregate?.reviewer_count
 				? ` | 多人 ${currentUidAggregate.reviewer_count}`
 				: "";
 			if (!review) {
-				meta.textContent = `${uidText} | 当前标注者：${reviewerName} | latest decision：未设置 | timestamp：- | reference_source：${fallbackReferenceSource || "未设置"}${aggregateText}`;
+				meta.textContent = `${uidText} | 当前标注者：${reviewerName} | 当前状态：未设置 | 时间：- | Tag：无 | 参考图层：${fallbackReferenceSource || "未设置"}${aggregateText}`;
 				return;
 			}
 			const timestamp = formatReviewTimestamp(review.timestamp) || "-";
 			const ref = review.reference_source || fallbackReferenceSource || "未设置";
-			meta.textContent = `${uidText} | 当前标注者：${reviewerName} | latest decision：${review.decision || "未设置"} | timestamp：${timestamp} | reference_source：${ref}${aggregateText}`;
+			const tagText = getReviewTags(review).join(" / ") || "无";
+			meta.textContent = `${uidText} | 当前标注者：${reviewerName} | 当前状态：${getReviewDecisionLabel(review.decision)} | 时间：${timestamp} | Tag：${tagText} | 参考图层：${ref}${aggregateText}`;
 		}
 
 		function populateReviewForm(uid, exists, review) {
 			const preferredReferenceSource = review?.reference_source || getPreferredReferenceSource(exists);
+			const selectedTag = getReviewTags(review)[0] || "";
 			document.getElementById("review-current").textContent = uid ? `当前 UID：${uid}` : "请选择 UID 后保存 `accept / reject / skip`。";
 			document.getElementById("reviewer-identity-value").textContent = getCurrentReviewerName() || "未设置";
 			document.getElementById("reference-source-input").value = preferredReferenceSource || "";
 			document.getElementById("review-notes").value = review?.notes || "";
+			renderReviewTagOptions(selectedTag);
 			setDecisionButtons(review?.decision || "", { silent: true });
 			updateReviewMeta(review, preferredReferenceSource);
 			markReviewPristine();
 		}
 
 		async function loadReviewIndex() {
-			if (currentUiConfig.hideReviewPanel) {
+			if (currentUiConfig.annotationEnabled === false || currentUiConfig.hideReviewPanel) {
 				reviewApiAvailable = false;
-				reviewIndex = { reviews: {}, counts: {} };
+				reviewIndex = { reviews: {}, counts: {}, aggregate_counts_by_uid: {} };
 				return;
 			}
 			const reviewerReady = await ensureReviewerSessionReady({ prompt: true });
@@ -2164,7 +2709,7 @@
 
 		async function loadReviewForUid(uid, exists) {
 			if (!uid) return;
-			if (currentUiConfig.hideReviewPanel) {
+			if (currentUiConfig.annotationEnabled === false || currentUiConfig.hideReviewPanel) {
 				populateReviewForm(uid, exists, null);
 				return;
 			}
@@ -2206,6 +2751,7 @@
 			}
 			const notes = document.getElementById("review-notes").value.trim();
 			const referenceSource = document.getElementById("reference-source-input").value.trim();
+			const trajectoryTags = getSelectedReviewTag() ? [getSelectedReviewTag()] : [];
 			if (!reviewApiAvailable) {
 				setReviewStatus("审核接口：未连接，无法保存", true);
 				return;
@@ -2222,7 +2768,8 @@
 						reviewer_id: getCurrentReviewerId(),
 						reviewer_name: getCurrentReviewerName(),
 						notes,
-						reference_source: referenceSource
+						reference_source: referenceSource,
+						trajectory_tags: trajectoryTags,
 					})
 				});
 				if (!response.ok) {
@@ -2585,6 +3132,11 @@
 			return normalized.length ? normalized : fallback;
 		}
 
+		function normalizeReviewTagOptions(tags) {
+			if (!Array.isArray(tags) || !tags.length) return [...DEFAULT_REVIEW_TAG_OPTIONS];
+			return dedupePreserveOrder(tags);
+		}
+
 		function normalizeAnnotationSettings(settings) {
 			const parsedFocus = parseNumericValue(settings?.focusOpacity);
 			const parsedIdle = parseNumericValue(settings?.idleOpacity);
@@ -2594,6 +3146,7 @@
 				focusOpacity,
 				idleOpacity,
 				categories: normalizeAnnotationCategories(settings?.categories),
+				reviewTags: normalizeReviewTagOptions(settings?.reviewTags),
 			};
 		}
 
@@ -2638,6 +3191,52 @@
 			return String(getAnnotationCategoryById(categoryId)?.name || "").trim() || "未命名标签";
 		}
 
+		function getReviewDecisionLabel(decision) {
+			return REVIEW_DECISION_LABELS[String(decision || "").trim().toLowerCase()] || String(decision || "").trim() || "未设置";
+		}
+
+		function normalizeReviewTags(value) {
+			if (Array.isArray(value)) return dedupePreserveOrder(value);
+			const single = String(value || "").trim();
+			return single ? [single] : [];
+		}
+
+		function getReviewTags(review) {
+			return normalizeReviewTags(review?.trajectory_tags || review?.tags || review?.tag);
+		}
+
+		function getSelectedReviewTag() {
+			const select = document.getElementById("review-tag-select");
+			return String(select?.value || "").trim();
+		}
+
+		function renderReviewTagOptions(selectedTag = "") {
+			const select = document.getElementById("review-tag-select");
+			if (!select) return;
+			const availableTags = normalizeReviewTagOptions(annotationSettings.reviewTags);
+			const mergedTags = selectedTag && !availableTags.includes(selectedTag)
+				? [selectedTag, ...availableTags]
+				: availableTags;
+			const normalizedSelected = selectedTag && mergedTags.includes(selectedTag) ? selectedTag : "";
+			const options = [
+				`<option value="">无标签</option>`,
+				...mergedTags.map(tag => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`),
+			];
+			select.innerHTML = options.join("");
+			select.value = normalizedSelected;
+			select.disabled = mergedTags.length === 0;
+		}
+
+		function getFallbackLayerColor(layerName, fallbackIndex = 0) {
+			const normalized = String(layerName || "").trim().toLowerCase();
+			if (!normalized) return DEFAULT_LAYER_COLOR_PALETTE[fallbackIndex % DEFAULT_LAYER_COLOR_PALETTE.length];
+			let hash = 0;
+			for (let index = 0; index < normalized.length; index++) {
+				hash = ((hash * 33) + normalized.charCodeAt(index)) >>> 0;
+			}
+			return DEFAULT_LAYER_COLOR_PALETTE[(hash + Math.max(0, fallbackIndex)) % DEFAULT_LAYER_COLOR_PALETTE.length];
+		}
+
 		function floorToDisplayStep(ts, stepSeconds) {
 			const normalized = normalizeUnixSeconds(ts);
 			if (normalized == null) return null;
@@ -2667,10 +3266,7 @@
 		}
 
 		function getTimeScrubberPointCoordinate(layerKey, row) {
-			const lat = parseNumericValue(row.latitude ?? row.start_latitude ?? row.lat);
-			const lon = parseNumericValue(row.longitude ?? row.start_longitude ?? row.lng ?? row.lon);
-			if (lat == null || lon == null) return null;
-			return { lat, lon };
+			return getRowCoordinate(row);
 		}
 
 		function canUseTimeScrubberLayer(layerKey, exists = currentExistsByLayer) {
@@ -2687,6 +3283,8 @@
 
 		function chooseDefaultTimeScrubberLayer(candidates) {
 			if (!Array.isArray(candidates) || !candidates.length) return "";
+			const configuredPreferred = currentTimeScrubberPreferredLayers.find(layer => candidates.includes(layer));
+			if (configuredPreferred) return configuredPreferred;
 			const preferred = ["fmm", "raw", "snap", "signal", "gps", "od"];
 			const visiblePreferred = preferred.find(layer => candidates.includes(layer) && layerStyles[layer]?.visible !== false);
 			if (visiblePreferred) return visiblePreferred;
@@ -2778,6 +3376,13 @@
 			document.getElementById("time-scrubber-control").classList.toggle("active", !!nextActive);
 		}
 
+		function isEditableKeyboardTarget(target) {
+			if (!target) return false;
+			if (target instanceof HTMLElement && target.isContentEditable) return true;
+			return typeof target.closest === "function"
+				&& !!target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
+		}
+
 		function clearTimeFocusMarker() {
 			if (timeFocusMarker && map?.hasLayer?.(timeFocusMarker)) map.removeLayer(timeFocusMarker);
 			timeFocusMarker = null;
@@ -2805,20 +3410,24 @@
 		}
 
 		function getCurrentTimelinePins() {
+			if (currentUiConfig.annotationEnabled === false || !currentUid || !getCurrentReviewerId()) return [];
 			return timelinePinsByTrack[getCurrentTimelinePinStoreKey()] || [];
 		}
 
 		function saveCurrentTimelinePins(pins) {
+			if (currentUiConfig.annotationEnabled === false || !currentUid || !getCurrentReviewerId()) return;
 			timelinePinsByTrack[getCurrentTimelinePinStoreKey()] = Array.isArray(pins) ? pins : [];
 			persistTimelineAnnotationStore(TIMELINE_PINS_STORAGE_KEY, timelinePinsByTrack);
 			void persistCurrentTimelineAnnotationsToServer();
 		}
 
 		function getCurrentTimelineSegments() {
+			if (currentUiConfig.annotationEnabled === false || !currentUid || !getCurrentReviewerId()) return [];
 			return timelineSegmentsByTrack[getCurrentTimelinePinStoreKey()] || [];
 		}
 
 		function saveCurrentTimelineSegments(segments) {
+			if (currentUiConfig.annotationEnabled === false || !currentUid || !getCurrentReviewerId()) return;
 			timelineSegmentsByTrack[getCurrentTimelinePinStoreKey()] = Array.isArray(segments) ? segments : [];
 			persistTimelineAnnotationStore(TIMELINE_SEGMENTS_STORAGE_KEY, timelineSegmentsByTrack);
 			void persistCurrentTimelineAnnotationsToServer();
@@ -2841,6 +3450,7 @@
 		}
 
 		function startTimelineSegmentDraft(categoryId, pointIndex) {
+			if (!ensureAnnotationSessionReady({ prompt: true })) return;
 			const point = (timeScrubberState.allPoints || [])[Math.max(0, Math.min((timeScrubberState.allPoints || []).length - 1, pointIndex ?? timeScrubberState.selectedIndex ?? 0))];
 			if (!point || !getAnnotationCategoryById(categoryId)) return;
 			segmentDraftState = {
@@ -2867,6 +3477,10 @@
 
 		function commitTimelineSegmentDraft(pointIndex) {
 			if (!segmentDraftState.active) return;
+			if (!ensureAnnotationSessionReady({ prompt: false })) {
+				cancelTimelineSegmentDraft({ silent: true });
+				return;
+			}
 			updateTimelineSegmentDraftFromIndex(pointIndex);
 			const category = getAnnotationCategoryById(segmentDraftState.categoryId);
 			if (!category) {
@@ -2940,7 +3554,7 @@
 
 		async function loadTimelineAnnotationsForUid(uid) {
 			if (!uid) return;
-			if (!getCurrentReviewerId()) {
+			if (currentUiConfig.annotationEnabled === false || !getCurrentReviewerId()) {
 				timelinePinsByTrack[getCurrentTimelinePinStoreKey()] = [];
 				timelineSegmentsByTrack[getCurrentTimelinePinStoreKey()] = [];
 				return;
@@ -2958,8 +3572,7 @@
 		}
 
 		async function persistCurrentTimelineAnnotationsToServer() {
-			if (!currentUid) return;
-			if (!getCurrentReviewerId()) return;
+			if (currentUiConfig.annotationEnabled === false || !currentUid || !getCurrentReviewerId()) return;
 			try {
 				await fetch(buildTimelineAnnotationsApiUrl(), {
 					method: "POST",
@@ -2985,7 +3598,7 @@
 		}
 
 		function removeTimelineSegmentById(segmentId) {
-			if (!segmentId) return;
+			if (!segmentId || currentUiConfig.annotationEnabled === false || !getCurrentReviewerId()) return;
 			saveCurrentTimelineSegments(getCurrentTimelineSegments().filter(segment => segment.id !== segmentId));
 			renderTimeScrubberControl();
 		}
@@ -3064,6 +3677,7 @@
 		}
 
 		function addTimelinePinAtIndex(pointIndex) {
+			if (!ensureAnnotationSessionReady({ prompt: true })) return;
 			const points = timeScrubberState.allPoints || [];
 			const clampedIndex = Math.max(0, Math.min(points.length - 1, Math.round(pointIndex ?? timeScrubberState.selectedIndex ?? 0)));
 			const point = points[clampedIndex];
@@ -3572,6 +4186,8 @@
 
 		function renderTimeScrubberControl() {
 			const control = document.getElementById("time-scrubber-control");
+			const stepPrevBtn = document.getElementById("time-scrubber-step-prev");
+			const stepNextBtn = document.getElementById("time-scrubber-step-next");
 			const leftBtn = document.getElementById("time-scrubber-left");
 			const rightBtn = document.getElementById("time-scrubber-right");
 			const zoomOutBtn = document.getElementById("time-scrubber-zoom-out");
@@ -3591,6 +4207,8 @@
 				hideTimeScrubberContextMenu();
 				document.getElementById("time-scrubber-status").textContent = `${getLayerLabel(timeScrubberState.selectedLayer)} | 当前日期区间内无可定位时间点`;
 				document.getElementById("time-scrubber-range").textContent = `日期区间 ${currentTimeWindow.startDay || "--"} -- ${currentTimeWindow.endDay || "--"} | 可切换其他图层继续查看`;
+				stepPrevBtn.disabled = true;
+				stepNextBtn.disabled = true;
 				leftBtn.disabled = true;
 				rightBtn.disabled = true;
 				zoomOutBtn.disabled = true;
@@ -3614,6 +4232,8 @@
 			document.getElementById("time-scrubber-range").textContent = segmentDraftState.active
 				? `正在标记 ${getAnnotationCategoryLabel(segmentDraftState.categoryId)} | 起点 ${formatDateTime(segmentDraftState.startTime)} | 预览终点 ${formatDateTime(segmentDraftState.previewTime)}`
 				: `日期区间 ${currentTimeWindow.startDay || "--"} -- ${currentTimeWindow.endDay || "--"} | 当前窗口 ${startIndex + 1}-${endIndex + 1} / ${total}`;
+			stepPrevBtn.disabled = timeScrubberState.selectedIndex <= 0;
+			stepNextBtn.disabled = timeScrubberState.selectedIndex >= total - 1;
 			const maxStart = getTimeScrubberMaxStart(total);
 			leftBtn.disabled = timeScrubberState.visibleStartIndex <= 0;
 			rightBtn.disabled = timeScrubberState.visibleStartIndex >= maxStart;
@@ -3635,6 +4255,25 @@
 			timeScrubberState.selectedIndex = clampedIndex;
 			if (options.keepWindow !== true) ensureTimeScrubberSelectionVisible();
 			renderTimeScrubberControl();
+		}
+
+		function stepTimeScrubberSelection(direction) {
+			if (!timeScrubberState.enabled || !timeScrubberState.allPoints.length || !direction) return false;
+			const total = timeScrubberState.allPoints.length;
+			const currentIndex = Math.max(0, Math.min(total - 1, Math.round(timeScrubberState.selectedIndex || 0)));
+			const nextIndex = Math.max(0, Math.min(total - 1, currentIndex + (direction > 0 ? 1 : -1)));
+			if (nextIndex === currentIndex) return false;
+			timeScrubberState.selectedIndex = nextIndex;
+			const visibleCount = getTimeScrubberVisibleCount(total);
+			const windowEnd = timeScrubberState.visibleStartIndex + Math.max(0, visibleCount - 1);
+			if (nextIndex < timeScrubberState.visibleStartIndex) {
+				timeScrubberState.visibleStartIndex = clampTimeScrubberVisibleStart(nextIndex, total);
+			} else if (nextIndex > windowEnd) {
+				timeScrubberState.visibleStartIndex = clampTimeScrubberVisibleStart(nextIndex - visibleCount + 1, total);
+			}
+			if (segmentDraftState.active) updateTimelineSegmentDraftFromIndex(nextIndex);
+			renderTimeScrubberControl();
+			return true;
 		}
 
 		function panTimeScrubberWindow(direction) {
@@ -3778,6 +4417,13 @@
 			return getRowStartTimeValue(row);
 		}
 
+		function getRowCoordinate(row) {
+			const lat = parseNumericValue(row?.latitude ?? row?.start_latitude ?? row?.lat);
+			const lon = parseNumericValue(row?.longitude ?? row?.start_longitude ?? row?.lng ?? row?.lon);
+			if (lat == null || lon == null) return null;
+			return { lat, lon };
+		}
+
 		function sampleEvenly(items, maxCount) {
 			if (!Array.isArray(items)) return [];
 			if (!Number.isFinite(maxCount) || maxCount <= 0 || items.length <= maxCount) return [...items];
@@ -3789,6 +4435,12 @@
 				if (result[result.length - 1] !== items[rawIndex]) result.push(items[rawIndex]);
 			}
 			return result;
+		}
+
+		function isOdLayer(layerKey) {
+			const cfg = layerConfig[layerKey] || {};
+			const normalizedKind = String(cfg.kind || "").trim().toLowerCase();
+			return !!cfg.isOD || normalizedKind === "od" || layerKey === "od";
 		}
 
 		function getLayerRenderProfile(layerKey, rowCount) {
@@ -3809,7 +4461,7 @@
 				profile.maxArrows = zoom >= 15 ? 80 : zoom >= 13 ? 56 : zoom >= 11 ? 32 : 20;
 				return profile;
 			}
-			if (cfg.isOD) {
+			if (isOdLayer(layerKey)) {
 				profile.maxBuckets = zoom >= 15 ? 240 : zoom >= 13 ? 160 : 100;
 				return profile;
 			}
@@ -3874,7 +4526,7 @@
 				const cid = getRowStationId(row);
 				return `CID ${cid || "-"} | ${formatTimeWindow(getRowStartTimeValue(row), getRowEndTimeValue(row))}`;
 			}
-			if (cfg.isOD) {
+			if (isOdLayer(layerKey)) {
 				const isStay = row.is_stationary === true || String(row.is_stationary).toLowerCase() === "true";
 				return `${isStay ? "stay" : "move"} | ${formatTimeWindow(getRowStartTimeValue(row), getRowEndTimeValue(row))}`;
 			}
@@ -4013,7 +4665,8 @@
 			const layerNames = [...layerOrder];
 			const results = await Promise.all(layerNames.map(async (layer) => {
 				try {
-					const r = await fetch(buildDataUrl(`${uid}/${layer}.csv`), { method: "HEAD" });
+					const filename = currentLayerFileMap[layer] || `${layer}.csv`;
+					const r = await fetch(buildDataUrl(`${uid}/${filename}`), { method: "HEAD" });
 					return [layer, r.ok];
 				} catch (_) {
 					return [layer, false];
@@ -4025,7 +4678,8 @@
 		async function fetchCsv(uid, layer) {
 			const key = `${uid}/${layer}`;
 			if (csvCache[key]) return csvCache[key];
-			const url = buildDataUrl(`${uid}/${layer}.csv`);
+			const filename = currentLayerFileMap[layer] || `${layer}.csv`;
+			const url = buildDataUrl(`${uid}/${filename}`);
 			try {
 				const r = await fetch(url);
 				if (!r.ok) return null;
@@ -4112,6 +4766,7 @@
 		function matchesGlobalSearch(uid, searchTerm) {
 			if (!searchTerm) return true;
 			const review = getReviewForUid(uid);
+			const reviewTagsText = getReviewTags(review).join(" ");
 			const precomputedStateText = [...(getUidStatesFromPrecomputed(uid) || new Set())].join(" ");
 			const haystacks = [
 				String(uid || ""),
@@ -4119,6 +4774,7 @@
 				String(review?.reviewer_name || ""),
 				String(review?.reviewer_id || ""),
 				String(review?.notes || ""),
+				reviewTagsText,
 				precomputedStateText
 			].map(item => item.toLowerCase());
 			return haystacks.some(item => item.includes(searchTerm));
@@ -4164,6 +4820,12 @@
 		function resolveActiveTriageColumnKey() {
 			const validKeys = triageColumns.map(column => column.key);
 			if (!validKeys.length) return "";
+			if (
+				triageLayoutMode === "stack"
+				&& validKeys.includes(activeTriageColumnKey)
+			) {
+				return activeTriageColumnKey;
+			}
 			if (currentUid) {
 				const currentBucketKey = getReviewBucketKey(currentUid);
 				if (
@@ -4384,7 +5046,7 @@
 			}
 			if (layerKey === "raw") return 3;
 			if (layerKey === "snap") return 2;
-			if (layerKey === "od") return 4;
+			if (isOdLayer(layerKey)) return cfg.pointRadius || 4;
 			const mt = normalizeStateValue(row.match_type, "unmatch");
 			return statusPointStyles[mt]?.size || 5;
 		}
@@ -4439,7 +5101,7 @@
 			};
 			if (!data || !data.length || !style || !style.visible) return renderStats;
 
-			if (cfg.isOD) {
+			if (isOdLayer(layerKey)) {
 				const rows = sampleEvenly(data, profile.maxBuckets);
 				renderStats.markerBuckets = rows.length;
 				renderStats.reduced = rows.length < data.length;
@@ -4453,13 +5115,13 @@
 					const isStay = row.is_stationary === true || String(row.is_stationary).toLowerCase() === "true";
 					const c = isStay ? "#795548" : "#f44336";
 					const startMarker = L.circleMarker([gslat, gslon], {
-						radius: getPointSize("od", row), color: c, fillColor: c, fillOpacity: style.opacity, weight: 1
+						radius: getPointSize(layerKey, row), color: c, fillColor: c, fillOpacity: style.opacity, weight: 1
 					}).addTo(targetGroup);
 					attachMarkerContent(startMarker, layerKey, { rows: [row], firstRow: row }, buildBucketHtml(layerKey, { rows: [row] }));
 					if (!Number.isNaN(elat) && !Number.isNaN(elon)) {
 						const [gelat, gelon] = toGcj(elat, elon);
 						const endMarker = L.circleMarker([gelat, gelon], {
-							radius: getPointSize("od", row), color: c, fillColor: c, fillOpacity: style.opacity, weight: 1
+							radius: getPointSize(layerKey, row), color: c, fillColor: c, fillOpacity: style.opacity, weight: 1
 						}).addTo(targetGroup);
 						attachMarkerContent(endMarker, layerKey, { rows: [row], firstRow: row }, buildBucketHtml(layerKey, { rows: [row] }));
 					}
@@ -4468,7 +5130,9 @@
 			}
 
 			if (cfg.kind === "stations") {
-				const stationBuckets = groupRowsIntoBuckets(layerKey, data, "latitude", "longitude", profile);
+				const stationLatCol = data[0].latitude != null ? "latitude" : data[0].lat != null ? "lat" : "start_latitude";
+				const stationLonCol = data[0].longitude != null ? "longitude" : data[0].lon != null ? "lon" : "start_longitude";
+				const stationBuckets = groupRowsIntoBuckets(layerKey, data, stationLatCol, stationLonCol, profile);
 				const tooltipKeys = pickTooltipBucketKeys(stationBuckets, profile.maxTooltipBuckets);
 				renderStats.markerBuckets = stationBuckets.length;
 				renderStats.reduced = stationBuckets.length < data.length;
@@ -4496,10 +5160,9 @@
 				Object.values(bySeg).forEach(pts => {
 					pts.sort((a, b) => (Number(a.point_order || 0) - Number(b.point_order || 0)));
 					const coords = sampleCoordinates(pts.map(p => {
-						const la = parseFloat(p.latitude);
-						const lo = parseFloat(p.longitude);
-						if (Number.isNaN(la) || Number.isNaN(lo)) return null;
-						return toGcj(la, lo);
+						const coord = getRowCoordinate(p);
+						if (!coord) return null;
+						return toGcj(coord.lat, coord.lon);
 					}).filter(Boolean), profile.maxPolylinePoints);
 					renderStats.polylinePoints += coords.length;
 					if (coords.length >= 2) {
@@ -4514,10 +5177,9 @@
 			if (cfg.kind === "gps") {
 				const coords = [];
 				data.forEach(row => {
-					const la = parseFloat(row.latitude);
-					const lo = parseFloat(row.longitude);
-					if (Number.isNaN(la) || Number.isNaN(lo)) return;
-					coords.push(toGcj(la, lo));
+					const coord = getRowCoordinate(row);
+					if (!coord) return;
+					coords.push(toGcj(coord.lat, coord.lon));
 				});
 				const sampledCoords = sampleCoordinates(coords, profile.maxPolylinePoints);
 				renderStats.polylinePoints = sampledCoords.length;
@@ -4527,7 +5189,9 @@
 					}).addTo(targetGroup);
 					renderStats.arrowCount += addSegmentArrows(sampledCoords, style.color, style.opacity, targetGroup, profile.maxArrows);
 				}
-				const gpsBuckets = groupRowsIntoBuckets(layerKey, data, "latitude", "longitude", profile);
+				const gpsLatCol = data[0].latitude != null ? "latitude" : data[0].lat != null ? "lat" : "start_latitude";
+				const gpsLonCol = data[0].longitude != null ? "longitude" : data[0].lon != null ? "lon" : "start_longitude";
+				const gpsBuckets = groupRowsIntoBuckets(layerKey, data, gpsLatCol, gpsLonCol, profile);
 				const tooltipKeys = pickTooltipBucketKeys(gpsBuckets, profile.maxTooltipBuckets);
 				renderStats.markerBuckets = gpsBuckets.length;
 				gpsBuckets.forEach(bucket => {
@@ -4546,10 +5210,9 @@
 			if (cfg.kind === "signal") {
 				const coords = [];
 				data.forEach(row => {
-					const la = parseFloat(row.latitude);
-					const lo = parseFloat(row.longitude);
-					if (Number.isNaN(la) || Number.isNaN(lo)) return;
-					coords.push(toGcj(la, lo));
+					const coord = getRowCoordinate(row);
+					if (!coord) return;
+					coords.push(toGcj(coord.lat, coord.lon));
 				});
 				const sampledCoords = sampleCoordinates(coords, profile.maxPolylinePoints);
 				renderStats.polylinePoints = sampledCoords.length;
@@ -4559,7 +5222,9 @@
 					}).addTo(targetGroup);
 					renderStats.arrowCount += addSegmentArrows(sampledCoords, style.color, style.opacity, targetGroup, profile.maxArrows);
 				}
-				const signalBuckets = groupRowsIntoBuckets(layerKey, data, "latitude", "longitude", profile);
+				const signalLatCol = data[0].latitude != null ? "latitude" : data[0].lat != null ? "lat" : "start_latitude";
+				const signalLonCol = data[0].longitude != null ? "longitude" : data[0].lon != null ? "lon" : "start_longitude";
+				const signalBuckets = groupRowsIntoBuckets(layerKey, data, signalLatCol, signalLonCol, profile);
 				const tooltipKeys = pickTooltipBucketKeys(signalBuckets, profile.maxTooltipBuckets);
 				renderStats.markerBuckets = signalBuckets.length;
 				signalBuckets.forEach(bucket => {
@@ -4573,8 +5238,8 @@
 				return renderStats;
 			}
 
-			const latCol = data[0].latitude != null ? "latitude" : "start_latitude";
-			const lonCol = data[0].longitude != null ? "longitude" : "start_longitude";
+			const latCol = data[0].latitude != null ? "latitude" : data[0].lat != null ? "lat" : "start_latitude";
+			const lonCol = data[0].longitude != null ? "longitude" : data[0].lon != null ? "lon" : "start_longitude";
 			const coords = [];
 			data.forEach(row => {
 				const la = parseFloat(row[latCol]);
@@ -4842,9 +5507,10 @@
 			setBatchStatus(`批次切换中：${targetMeta.label || targetMeta.name}`);
 			resetBatchCaches();
 			resetBatchViewState();
-			await loadReviewIndex();
 			const nextUids = await discoverUids();
 			uidList = [...nextUids];
+			await loadReviewIndex();
+			applyUiChrome();
 			await refreshFilteredUids({ resetVisibleCounts: true });
 			const initialUid = keepUid && uidList.includes(keepUid) ? keepUid : (filteredUidList[0] || uidList[0] || null);
 			if (initialUid) {
@@ -4929,6 +5595,8 @@
 		});
 		document.getElementById("reference-source-input").addEventListener("input", syncReviewDirtyState);
 		document.getElementById("reference-source-input").addEventListener("change", syncReviewDirtyState);
+		document.getElementById("review-tag-select").addEventListener("input", syncReviewDirtyState);
+		document.getElementById("review-tag-select").addEventListener("change", syncReviewDirtyState);
 		document.getElementById("review-notes").addEventListener("input", syncReviewDirtyState);
 		document.getElementById("review-notes").addEventListener("change", syncReviewDirtyState);
 		document.getElementById("status-filter-row").addEventListener("change", () => {
@@ -4942,6 +5610,9 @@
 		});
 		document.getElementById("review-aggregate-toggle").addEventListener("click", () => {
 			setReviewAggregateCollapsed(!reviewAggregateCollapsed, { userInitiated: true });
+		});
+		document.getElementById("review-panel-toggle").addEventListener("click", () => {
+			setReviewPanelCollapsed(!reviewPanelCollapsed);
 		});
 		document.getElementById("prev-pending-btn").addEventListener("click", async (event) => {
 			const uid = event.currentTarget.dataset.uid;
@@ -4990,6 +5661,8 @@
 		const timeScrubberCanvas = document.getElementById("time-scrubber-canvas");
 		const timeScrubberOverviewCanvas = document.getElementById("time-scrubber-overview-canvas");
 		const timeScrubberLayerSelect = document.getElementById("time-scrubber-layer-select");
+		const timeScrubberStepPrev = document.getElementById("time-scrubber-step-prev");
+		const timeScrubberStepNext = document.getElementById("time-scrubber-step-next");
 		const timeScrubberLeft = document.getElementById("time-scrubber-left");
 		const timeScrubberRight = document.getElementById("time-scrubber-right");
 		const timeScrubberZoomOut = document.getElementById("time-scrubber-zoom-out");
@@ -4999,6 +5672,7 @@
 		const annotationSettingsOverlay = document.getElementById("annotation-settings-overlay");
 		const annotationSettingsClose = document.getElementById("annotation-settings-close");
 		const annotationCategoryAdd = document.getElementById("annotation-category-add");
+		const annotationTagAdd = document.getElementById("annotation-tag-add");
 		const annotationFocusOpacityInput = document.getElementById("annotation-focus-opacity");
 		const annotationIdleOpacityInput = document.getElementById("annotation-idle-opacity");
 		timeScrubberControl.addEventListener("mouseenter", () => setTimeScrubberActive(true));
@@ -5007,6 +5681,14 @@
 		});
 		timeScrubberLayerSelect.addEventListener("change", (event) => {
 			setTimeScrubberLayer(event.target.value);
+		});
+		timeScrubberStepPrev.addEventListener("click", () => {
+			setTimeScrubberActive(true);
+			stepTimeScrubberSelection(-1);
+		});
+		timeScrubberStepNext.addEventListener("click", () => {
+			setTimeScrubberActive(true);
+			stepTimeScrubberSelection(1);
 		});
 		timeScrubberLeft.addEventListener("click", () => panTimeScrubberWindow(-1));
 		timeScrubberRight.addEventListener("click", () => panTimeScrubberWindow(1));
@@ -5041,7 +5723,8 @@
 			updateTimeScrubberSelectionFromClientX(event.clientX);
 		});
 		timeScrubberCanvas.addEventListener("contextmenu", (event) => {
-			if (!timeScrubberState.enabled || !timeScrubberState.allPoints.length) return;
+			if (!timeScrubberState.enabled || !timeScrubberState.allPoints.length || currentUiConfig.annotationEnabled === false) return;
+			if (!ensureAnnotationSessionReady({ prompt: true })) return;
 			event.preventDefault();
 			updateTimeScrubberSelectionFromClientX(event.clientX);
 			showTimeScrubberContextMenu(event.clientX, event.clientY, timeScrubberState.selectedIndex);
@@ -5191,22 +5874,36 @@
 			hideTimeScrubberContextMenu();
 		});
 		document.addEventListener("keydown", (event) => {
-			if (event.key !== "Escape") return;
-			if (segmentDraftState.active) {
-				cancelTimelineSegmentDraft();
+			if (event.key === "Escape") {
+				if (segmentDraftState.active) {
+					cancelTimelineSegmentDraft();
+					return;
+				}
+				if (document.getElementById("reviewer-session-overlay").classList.contains("open")) {
+					closeReviewerSessionModal();
+					return;
+				}
+				if (annotationSettingsOverlay.classList.contains("open")) {
+					closeAnnotationSettings();
+					return;
+				}
+				hideTimeScrubberContextMenu();
 				return;
 			}
-			if (document.getElementById("reviewer-session-overlay").classList.contains("open")) {
-				closeReviewerSessionModal();
-				return;
-			}
-			if (annotationSettingsOverlay.classList.contains("open")) {
-				closeAnnotationSettings();
-				return;
-			}
-			hideTimeScrubberContextMenu();
+			if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+			if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+			if (document.getElementById("reviewer-session-overlay").classList.contains("open")) return;
+			if (annotationSettingsOverlay.classList.contains("open")) return;
+			if (isEditableKeyboardTarget(event.target)) return;
+			const moved = stepTimeScrubberSelection(event.key === "ArrowLeft" ? -1 : 1);
+			if (!moved) return;
+			event.preventDefault();
+			setTimeScrubberActive(true);
 		});
-		annotationSettingsEntry.addEventListener("click", () => openAnnotationSettings());
+		annotationSettingsEntry.addEventListener("click", () => {
+			if (currentUiConfig.annotationEnabled === false) return;
+			openAnnotationSettings();
+		});
 		annotationSettingsClose.addEventListener("click", () => closeAnnotationSettings());
 		annotationSettingsOverlay.addEventListener("click", (event) => {
 			if (event.target === annotationSettingsOverlay) closeAnnotationSettings();
@@ -5221,6 +5918,21 @@
 			persistAnnotationSettings();
 			renderAnnotationCategoryList();
 			applyAnnotationUiSettings();
+		});
+		annotationTagAdd.addEventListener("click", () => {
+			const nextIndex = annotationSettings.reviewTags.length + 1;
+			annotationSettings.reviewTags.push(`Tag ${nextIndex}`);
+			annotationSettings = normalizeAnnotationSettings(annotationSettings);
+			persistAnnotationSettings();
+			renderAnnotationTagList();
+			renderReviewTagOptions(getSelectedReviewTag());
+			syncReviewDirtyState();
+			window.setTimeout(() => {
+				const inputs = [...document.querySelectorAll("#annotation-tag-list .annotation-tag-name")];
+				const target = inputs[inputs.length - 1];
+				target?.focus();
+				target?.select?.();
+			}, 0);
 		});
 		annotationFocusOpacityInput.addEventListener("input", (event) => {
 			annotationSettings.focusOpacity = Math.max(0.5, Math.min(1, parseNumericValue(event.target.value) ?? annotationSettings.focusOpacity));

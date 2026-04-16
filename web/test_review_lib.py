@@ -40,6 +40,12 @@ class ReviewLibTest(unittest.TestCase):
 		path.parent.mkdir(parents=True, exist_ok=True)
 		path.write_text(content, encoding="utf-8")
 
+	def _write_manifest(self, payload: dict) -> None:
+		(self.result_root / "manifest.json").write_text(
+			json.dumps(payload, ensure_ascii=False) + "\n",
+			encoding="utf-8",
+		)
+
 	def _write_uid_assets(self, uid: str, *, line: bool = True, fmm: bool = False) -> None:
 		uid_dir = self.result_root / uid
 		self._write_csv(uid_dir / "raw.csv", f"uid,latitude\n{uid},39.9\n")
@@ -84,6 +90,27 @@ class ReviewLibTest(unittest.TestCase):
 		self.assertEqual(len(aggregate["latest_reviews"]), 2)
 		self.assertEqual(aggregate["decision_counts"]["accept"], 1)
 		self.assertEqual(aggregate["decision_counts"]["skip"], 1)
+
+	def test_review_tags_round_trip_through_latest_and_aggregate(self) -> None:
+		self._write_uid_assets("1003", line=True, fmm=True)
+
+		review = write_review(
+			self.paths,
+			{
+				"uid": "1003",
+				"decision": "accept",
+				"reviewer": "Alice",
+				"reference_source": "line.csv",
+				"trajectory_tags": ["高优", "需复核", "高优"],
+			},
+		)
+
+		latest = read_latest_reviews(self.paths, reviewer_id="alice")
+		aggregate = get_uid_review_aggregate(self.paths, "1003")
+
+		self.assertEqual(review["trajectory_tags"], ["高优", "需复核"])
+		self.assertEqual(latest["reviews"]["1003"]["trajectory_tags"], ["高优", "需复核"])
+		self.assertEqual(aggregate["latest_reviews"][0]["trajectory_tags"], ["高优", "需复核"])
 
 	def test_timeline_annotations_are_isolated_per_reviewer(self) -> None:
 		ensure_reviewer_profile(self.paths, display_name="Alice")
@@ -174,6 +201,42 @@ class ReviewLibTest(unittest.TestCase):
 					"notes": "raw only should fail",
 				},
 			)
+
+	def test_write_review_accepts_manifest_declared_reference_file(self) -> None:
+		self._write_manifest(
+			{
+				"uids": ["4101"],
+				"layers": ["gps", "tier4"],
+				"layer_specs": {
+					"gps": {"filename": "gps.csv", "kind": "gps"},
+					"tier4": {"filename": "tier4.csv", "kind": "signal", "review_reference": True},
+				},
+			}
+		)
+		uid_dir = self.result_root / "4101"
+		self._write_csv(uid_dir / "raw.csv", "uid,latitude\n4101,39.7\n")
+		self._write_csv(uid_dir / "tier4.csv", "uid,cid,lat,lon,t_in,t_out\n4101,1,39.7,116.3,1,2\n")
+
+		review = write_review(
+			self.paths,
+			{
+				"uid": "4101",
+				"decision": "accept",
+				"reviewer": "Alice",
+			},
+		)
+		self.assertEqual(review["reference_source"], "tier4.csv")
+
+		manifest = export_reviewer_bundle(
+			self.paths,
+			reviewer_id="alice",
+			clean=True,
+			bundle_name="tier4_bundle",
+		)
+		self.assertEqual(manifest["sample_count"], 1)
+		self.assertTrue(
+			(self.paths.review_root / "review_exports" / "reviewers" / "alice" / "tier4_bundle" / "samples" / "4101" / "tier4.csv").exists()
+		)
 
 	def test_export_review_aggregate_outputs_conflicts(self) -> None:
 		self._write_uid_assets("5001", line=True, fmm=True)

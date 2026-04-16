@@ -143,6 +143,9 @@ def _safe_uid_count(result_root: Path) -> int | None:
 
 def _build_batch_payload(batch: ReviewBatch) -> dict:
 	uid_count = _safe_uid_count(batch.paths.result_root)
+	ui_config = batch.metadata.get("ui_config")
+	if not isinstance(ui_config, dict):
+		ui_config = {}
 	return {
 		"name": batch.name,
 		"label": batch.label,
@@ -155,6 +158,7 @@ def _build_batch_payload(batch: ReviewBatch) -> dict:
 		"version": batch.metadata.get("version") or "",
 		"keywords": batch.metadata.get("keywords") or [],
 		"uid_count": uid_count,
+		"ui_config": ui_config,
 	}
 
 

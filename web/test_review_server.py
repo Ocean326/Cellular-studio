@@ -57,22 +57,22 @@ class ReviewServerApiTest(unittest.TestCase):
 		path.parent.mkdir(parents=True, exist_ok=True)
 		path.write_text(content, encoding="utf-8")
 
-	def _create_published_batch(self, batch_name: str) -> Path:
+	def _create_published_batch(self, batch_name: str, metadata: dict | None = None) -> Path:
 		batch_root = self.batches_root / batch_name
 		(batch_root / "review" / "reviewers").mkdir(parents=True, exist_ok=True)
 		(batch_root / "review" / "aggregate").mkdir(parents=True, exist_ok=True)
 		(batch_root / "review" / "system").mkdir(parents=True, exist_ok=True)
 		(batch_root / "accepted_assets" / "reviewers").mkdir(parents=True, exist_ok=True)
 		(batch_root / "review_exports" / "aggregate").mkdir(parents=True, exist_ok=True)
+		batch_meta = {
+			"name": batch_name,
+			"label": batch_name,
+			"source_result_root": str(self.result_root),
+		}
+		if metadata:
+			batch_meta.update(metadata)
 		(batch_root / "batch_meta.json").write_text(
-			json.dumps(
-				{
-					"name": batch_name,
-					"label": batch_name,
-					"source_result_root": str(self.result_root),
-				}
-			)
-			+ "\n",
+			json.dumps(batch_meta) + "\n",
 			encoding="utf-8",
 		)
 		return batch_root
@@ -243,6 +243,25 @@ class ReviewServerApiTest(unittest.TestCase):
 
 		self.assertEqual(review["decision"], "accept")
 		self.assertEqual(review["reviewer_id"], "alice-demo")
+
+	def test_batch_list_exposes_ui_config_from_batch_meta(self) -> None:
+		self._create_published_batch(
+			"ui_demo_b01",
+			metadata={
+				"ui_config": {
+					"annotation_enabled": False,
+					"layer_specs": {
+						"raw": {"defaultColor": "#123456"},
+					},
+				},
+			},
+		)
+
+		payload = self._request("GET", "/api/batches")
+		batch = next(item for item in payload["batches"] if item["name"] == "ui_demo_b01")
+
+		self.assertEqual(batch["ui_config"]["annotation_enabled"], False)
+		self.assertEqual(batch["ui_config"]["layer_specs"]["raw"]["defaultColor"], "#123456")
 
 
 if __name__ == "__main__":

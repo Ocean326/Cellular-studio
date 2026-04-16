@@ -24,13 +24,14 @@ python -m http.server 8000
 - **左侧面板**：可折叠（点击标题栏 ◀ 按钮）、可拖拽右侧边缘调整宽度（260px–600px），宽度会保存到 localStorage
 - **UID 列表**：从 `data/result/manifest.json` 或 `data/result/` 目录扫描可用 UID
 - **UID 状态筛选**：按 `road/subway/railway/unmatch/stay` 过滤 UID，支持“任一命中”与“全部命中”
-- **分层展示**：按 uid 目录下存在的文件（raw.csv、snap.csv、od.csv、fmm.csv、line.csv）动态显示图层
+- **分层展示**：优先按 `manifest.layers + manifest.layer_specs.<layer>.filename` 动态显示图层；未声明时回退到旧版 `raw.csv / snap.csv / od.csv / fmm.csv / line.csv`
 - **图层样式**：每层可勾选显隐、修改颜色、透明度，并支持拖拽调整图层顺序（上层覆盖下层）
 - **状态点样式**：可分别修改 `road/subway/railway/unmatch/stay` 的点颜色与点大小（影响 fmm/line）
 - **方向箭头**：点与点的连线段中间绘制小箭头，便于查看轨迹方向
 - **CSV 预览**：底部表格可切换 raw/snap/fmm/od/line 的前 50 行
 - **整轨审核**：新增 `accept / reject / skip` 控件，可保存 `reviewer`、`notes`、`reference_source`
 - **审核写回**：review server 提供 `/api/reviews` 读写当前 ledger
+- **异构图层合同**：支持 raw6 类 `uid/cid/lat/lon/t_in/t_out` 图层，适合 `GPS -> tier1-4` 这类同轨迹多来源对照
 - **缓存优化**：
   - 地图实例与瓦片图层只初始化一次，避免切换 UID 时重复创建地图
   - 已渲染的 UID 图层按“当前样式签名”缓存，切回同 UID 时可直接复用

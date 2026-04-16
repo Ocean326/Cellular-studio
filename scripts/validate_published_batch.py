@@ -15,7 +15,11 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--batch-root", required=True, help="Batch root containing batch_meta.json or result/")
 	parser.add_argument("--allow-missing-states-index", action="store_true", help="Do not fail if states_index.json is absent")
 	parser.add_argument("--allow-missing-manifest", action="store_true", help="Do not fail if manifest.json is absent")
-	parser.add_argument("--require-review-reference", action="store_true", help="Require every UID to have line.csv or fmm.csv")
+	parser.add_argument(
+		"--require-review-reference",
+		action="store_true",
+		help="Require every UID to have a manifest-declared review reference file; falls back to line.csv/fmm.csv",
+	)
 	return parser.parse_args()
 
 
