@@ -413,7 +413,7 @@
 		}
 
 		function initMap() {
-			map = L.map("map", { center: [39.9, 116.4], zoom: 11, preferCanvas: true });
+			map = L.map("map", { center: [39.9, 116.4], zoom: 11, preferCanvas: true, keyboard: false });
 			tileLayer = L.tileLayer(GAODE_TILE, { attribution: "Gaode", keepBuffer: 6, updateWhenIdle: true, updateWhenZooming: false });
 			tileLayer.addTo(map);
 			L.control.scale({ imperial: false }).addTo(map);
@@ -1389,6 +1389,62 @@
 				: (effectiveStart ?? effectiveEnd);
 		}
 
+		function pickTimeScrubberTargetTimeFromRows(rows, preferredTime = null) {
+			if (!Array.isArray(rows) || !rows.length) return null;
+			if (preferredTime == null || !Number.isFinite(preferredTime)) {
+				for (const row of rows) {
+					const rowTime = getRowMidTimeSeconds(row);
+					if (rowTime != null) return rowTime;
+				}
+				return null;
+			}
+			let bestTime = null;
+			let bestDistance = Infinity;
+			rows.forEach(row => {
+				const rowTime = getRowMidTimeSeconds(row);
+				if (rowTime == null) return;
+				const distance = Math.abs(rowTime - preferredTime);
+				if (distance < bestDistance) {
+					bestDistance = distance;
+					bestTime = rowTime;
+				}
+			});
+			return bestTime;
+		}
+
+		function alignTimeScrubberToTime(targetTime, options = {}) {
+			if (targetTime == null || !Number.isFinite(targetTime)) return false;
+			const candidates = getTimeScrubberLayerCandidates(currentExistsByLayer);
+			if (!candidates.length) return false;
+			const requestedLayer = options.layerKey;
+			const nextLayer = candidates.includes(requestedLayer)
+				? requestedLayer
+				: (candidates.includes(timeScrubberState.selectedLayer)
+					? timeScrubberState.selectedLayer
+					: chooseDefaultTimeScrubberLayer(candidates));
+			if (nextLayer && nextLayer !== timeScrubberState.selectedLayer) {
+				setTimeScrubberLayer(nextLayer);
+			}
+			if (!timeScrubberState.enabled || !timeScrubberState.allPoints.length) return false;
+			const nextIndex = findNearestTimeScrubberPointIndex(timeScrubberState.allPoints, targetTime);
+			setTimeScrubberSelectedIndex(nextIndex, {
+				keepWindow: options.keepWindow === true,
+				followView: options.followView === true,
+			});
+			setTimeScrubberActive(true);
+			return true;
+		}
+
+		function alignTimeScrubberToBucket(layerKey, bucket, options = {}) {
+			const preferredTime = options.preferredTime ?? (getActiveTimeScrubberPoint()?.time ?? null);
+			const targetTime = pickTimeScrubberTargetTimeFromRows(bucket?.rows || [], preferredTime);
+			return alignTimeScrubberToTime(targetTime, {
+				layerKey,
+				keepWindow: options.keepWindow === true,
+				followView: options.followView === true,
+			});
+		}
+
 		function getTimeScrubberGpsStatusSamples() {
 			const gpsRows = currentFilteredDataByLayer.gps || [];
 			if (
@@ -2098,9 +2154,10 @@
 			if (markerEl) markerEl.style.opacity = (timeScrubberState.isDragging || timeScrubberState.isOverviewDragging) ? "0.72" : "1";
 			const tooltipEl = timeFocusMarker.getTooltip?.()?.getElement?.();
 			if (tooltipEl) tooltipEl.classList.toggle("dimmed", !!(timeScrubberState.isDragging || timeScrubberState.isOverviewDragging));
-			if (mapViewFollowScrubber && timeScrubberState.isDragging) {
+			if (mapViewFollowScrubber && (timeScrubberState.isDragging || timeScrubberState.followSelectionOnUpdate)) {
 				map.panTo([glat, glon], { animate: false });
 			}
+			timeScrubberState.followSelectionOnUpdate = false;
 		}
 
 		function resetTimeScrubber() {
@@ -2112,6 +2169,7 @@
 				visibleStartIndex: 0,
 				visibleCount: 0,
 				selectedIndex: 0,
+				followSelectionOnUpdate: false,
 				isDragging: false,
 				isOverviewDragging: false,
 				overviewDragMode: "",
@@ -2595,28 +2653,28 @@
 		function setTimeScrubberSelectedIndex(nextIndex, options = {}) {
 			const total = timeScrubberState.allPoints.length;
 			if (!total) return;
+			const previousVisibleStartIndex = timeScrubberState.visibleStartIndex;
 			const clampedIndex = Math.max(0, Math.min(total - 1, Math.round(nextIndex || 0)));
+			const selectionChanged = clampedIndex !== timeScrubberState.selectedIndex;
 			timeScrubberState.selectedIndex = clampedIndex;
+			if (selectionChanged && options.followView === true) {
+				timeScrubberState.followSelectionOnUpdate = true;
+			}
 			if (options.keepWindow !== true) ensureTimeScrubberSelectionVisible();
 			renderTimeScrubberControl();
+			if (timeScrubberState.visibleStartIndex !== previousVisibleStartIndex) {
+				scheduleMapDisplayRefreshForTimeScrubber();
+			}
 		}
 
 		function stepTimeScrubberSelection(direction) {
 			if (!timeScrubberState.enabled || !timeScrubberState.allPoints.length || !direction) return false;
+			const currentIndex = Math.max(0, Math.min(timeScrubberState.allPoints.length - 1, Math.round(timeScrubberState.selectedIndex || 0)));
 			const total = timeScrubberState.allPoints.length;
-			const currentIndex = Math.max(0, Math.min(total - 1, Math.round(timeScrubberState.selectedIndex || 0)));
 			const nextIndex = Math.max(0, Math.min(total - 1, currentIndex + (direction > 0 ? 1 : -1)));
 			if (nextIndex === currentIndex) return false;
-			timeScrubberState.selectedIndex = nextIndex;
-			const visibleCount = getTimeScrubberVisibleCount(total);
-			const windowEnd = timeScrubberState.visibleStartIndex + Math.max(0, visibleCount - 1);
-			if (nextIndex < timeScrubberState.visibleStartIndex) {
-				timeScrubberState.visibleStartIndex = clampTimeScrubberVisibleStart(nextIndex, total);
-			} else if (nextIndex > windowEnd) {
-				timeScrubberState.visibleStartIndex = clampTimeScrubberVisibleStart(nextIndex - visibleCount + 1, total);
-			}
-			if (segmentDraftState.active) updateTimelineSegmentDraftFromIndex(nextIndex);
-			renderTimeScrubberControl();
+			setTimeScrubberSelectedIndex(nextIndex, { followView: true });
+			if (segmentDraftState.active) updateTimelineSegmentDraftFromIndex(timeScrubberState.selectedIndex);
 			return true;
 		}
 
@@ -2991,7 +3049,14 @@
 
 		function attachMarkerContent(marker, layerKey, bucket, contentHtml, options = {}) {
 			const popupHtml = contentHtml || buildBucketHtml(layerKey, bucket);
+			marker.__studioLayerKey = layerKey;
+			marker.__studioBucket = bucket;
 			marker.bindPopup(popupHtml, { maxWidth: 320 });
+			if (options.syncTimeScrubber !== false) {
+				marker.on("click", () => {
+					alignTimeScrubberToBucket(layerKey, bucket, { keepWindow: false, followView: false });
+				});
+			}
 			if (layerStyles[layerKey]?.showLabels && options.allowTooltip !== false) {
 				marker.bindTooltip(buildBucketTooltipHtml(layerKey, bucket), {
 					permanent: true,

@@ -453,6 +453,7 @@
 			const moved = stepTimeScrubberSelection(event.key === "ArrowLeft" ? -1 : 1);
 			if (!moved) return;
 			event.preventDefault();
+			event.stopPropagation();
 			setTimeScrubberActive(true);
 		});
 		annotationSettingsEntry.addEventListener("click", () => {

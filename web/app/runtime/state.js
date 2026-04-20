@@ -92,6 +92,7 @@
 			visibleStartIndex: 0,
 			visibleCount: 0,
 			selectedIndex: 0,
+			followSelectionOnUpdate: false,
 			isDragging: false,
 			isOverviewDragging: false,
 			overviewDragMode: "",

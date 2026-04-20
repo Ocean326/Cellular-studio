@@ -161,7 +161,9 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 						}},
 					}};
 				}}
-				focus() {{}}
+				focus() {{
+					document.activeElement = this;
+				}}
 				select() {{}}
 				setPointerCapture() {{}}
 				releasePointerCapture() {{}}
@@ -186,6 +188,7 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 
 			const document = {{
 				body: new ElementMock("body", "body"),
+				activeElement: null,
 				getElementById(id) {{
 					return getElement(id);
 				}},
@@ -245,6 +248,7 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 				return Object.assign(
 					{{
 						_tooltip: null,
+						listeners: {{}},
 						addTo(target) {{
 							if (target && typeof target.addLayer === "function") target.addLayer(this);
 							return this;
@@ -267,7 +271,14 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 						setTooltipContent(content) {{
 							if (this._tooltip) this._tooltip.content = content;
 						}},
-						on() {{
+						on(type, handler) {{
+							(this.listeners[type] ||= []).push(handler);
+							return this;
+						}},
+						fire(type, payload = {{}}) {{
+							for (const handler of this.listeners[type] || []) {{
+								handler(Object.assign({{ target: this }}, payload));
+							}}
 							return this;
 						}},
 						getElement() {{
@@ -291,6 +302,7 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 			const mapMock = {{
 				_layers: new Set(),
 				_zoom: 11,
+				lastPanTarget: null,
 				on() {{}},
 				getZoom() {{
 					return this._zoom;
@@ -309,6 +321,9 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 				}},
 				fitBounds(bounds) {{
 					this.lastBounds = bounds;
+				}},
+				panTo(latlng) {{
+					this.lastPanTarget = latlng;
 				}},
 				invalidateSize() {{}},
 			}};
@@ -578,6 +593,7 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 				const initialSelectedLayer = vm.runInContext("timeScrubberState.selectedLayer", context);
 				const initialSelectedLayerFullCount = vm.runInContext("(currentFilteredDataByLayer[timeScrubberState.selectedLayer] || []).length", context);
 				const initialSelectedLayerMapCount = vm.runInContext("(getCurrentMapDisplayDataByLayer()[timeScrubberState.selectedLayer] || []).length", context);
+				const initialSelectedTime = vm.runInContext("getActiveTimeScrubberPoint()?.time ?? null", context);
 				let clickedUid = firstUid;
 
 				if (secondUid && secondUid !== firstUid) {{
@@ -641,6 +657,69 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 					if (pannedLayerCount <= 0) throw new Error("time scrubber pan-right cleared trajectory layers");
 				}}
 
+				let followStepSelectedTime = initialSelectedTime;
+				if (scrubberTotal > 1) {{
+					vm.runInContext("mapViewFollowScrubber = true", context);
+					const followStepDirection = vm.runInContext(
+						"timeScrubberState.selectedIndex >= Math.max(0, timeScrubberState.allPoints.length - 1) ? -1 : 1",
+						context,
+					);
+					vm.runInContext(`stepTimeScrubberSelection(${{followStepDirection}})`, context);
+					await new Promise((resolve) => setTimeout(resolve, 20));
+					followStepSelectedTime = vm.runInContext("getActiveTimeScrubberPoint()?.time ?? null", context);
+					if (followStepSelectedTime == null) {{
+						throw new Error("time scrubber step did not keep an active point");
+					}}
+					if (!mapMock.lastPanTarget) {{
+						throw new Error("time scrubber step with focus enabled did not pan the map");
+					}}
+				}}
+
+				const markerCandidates = vm.runInContext(`
+					(activeGroup?._layers || []).filter((layer) => Array.isArray(layer.__studioBucket?.rows) && (layer.listeners?.click || []).length)
+				`, context);
+				const markerBeforeTime = vm.runInContext("getActiveTimeScrubberPoint()?.time ?? null", context);
+				let markerTargetTime = null;
+				let markerAlignedTime = markerBeforeTime;
+				let markerAlignedLayer = vm.runInContext("timeScrubberState.selectedLayer", context);
+				if (markerCandidates.length) {{
+					let targetMarker = markerCandidates[0];
+					for (const candidate of markerCandidates) {{
+						context.__testMarker = candidate;
+						const candidateTargetTime = vm.runInContext(`
+							pickTimeScrubberTargetTimeFromRows(
+								__testMarker.__studioBucket?.rows || [],
+								getActiveTimeScrubberPoint()?.time ?? null
+							)
+						`, context);
+						if (candidateTargetTime == null) continue;
+						targetMarker = candidate;
+						markerTargetTime = candidateTargetTime;
+						if (markerBeforeTime == null || Math.abs(candidateTargetTime - markerBeforeTime) > 1) break;
+					}}
+					context.__testMarker = targetMarker;
+					if (markerTargetTime == null) {{
+						markerTargetTime = vm.runInContext(`
+							pickTimeScrubberTargetTimeFromRows(
+								__testMarker.__studioBucket?.rows || [],
+								getActiveTimeScrubberPoint()?.time ?? null
+							)
+						`, context);
+					}}
+					targetMarker.fire("click");
+					await new Promise((resolve) => setTimeout(resolve, 20));
+					markerAlignedTime = vm.runInContext("getActiveTimeScrubberPoint()?.time ?? null", context);
+					markerAlignedLayer = vm.runInContext("timeScrubberState.selectedLayer", context);
+				}}
+				if (markerCandidates.length && markerTargetTime != null) {{
+					if (markerAlignedTime == null) {{
+						throw new Error("marker click did not keep an active time scrubber point");
+					}}
+					if (Math.abs(markerAlignedTime - markerTargetTime) > 1) {{
+						throw new Error(`marker click did not align the time scrubber: expected≈${{markerTargetTime}}, got=${{markerAlignedTime}}`);
+					}}
+				}}
+
 				let switchedBatchName = vm.runInContext("currentBatchName", context);
 				let switchedUid = vm.runInContext("currentUid", context);
 				let switchedLayerCount = vm.runInContext("activeGroup?._layers?.length ?? 0", context);
@@ -678,12 +757,18 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 					initialSelectedLayer,
 					initialSelectedLayerFullCount,
 					initialSelectedLayerMapCount,
+					initialSelectedTime,
 					zoomedVisibleCount,
 					zoomedDisplaySignature,
 					zoomedSelectedLayerMapCount,
 					pannedVisibleStartIndex,
 					pannedDisplaySignature,
 					pannedSelectedLayerMapCount,
+					followStepSelectedTime,
+					lastPanTarget: mapMock.lastPanTarget,
+					markerTargetTime,
+					markerAlignedTime,
+					markerAlignedLayer,
 					switchedBatchName,
 					switchedUid,
 					switchedLayerCount,
@@ -731,6 +816,13 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 		if payload["pannedVisibleStartIndex"] > payload["initialVisibleStartIndex"]:
 			self.assertNotEqual(payload["pannedDisplaySignature"], payload["zoomedDisplaySignature"])
 			self.assertGreater(payload["pannedSelectedLayerMapCount"], 0)
+		if payload["scrubberTotal"] > 1:
+			self.assertIsNotNone(payload["followStepSelectedTime"])
+			self.assertNotEqual(payload["followStepSelectedTime"], payload["initialSelectedTime"])
+			self.assertIsNotNone(payload["lastPanTarget"])
+		if payload["markerTargetTime"] is not None:
+			self.assertIsNotNone(payload["markerAlignedTime"])
+			self.assertAlmostEqual(payload["markerAlignedTime"], payload["markerTargetTime"], delta=1.0)
 		if payload["secondUid"] and payload["secondUid"] != payload["firstUid"]:
 			self.assertEqual(payload["clickedUid"], payload["secondUid"])
 		if payload["alternateBatchName"]:
