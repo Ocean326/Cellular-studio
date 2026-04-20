@@ -5,14 +5,17 @@ import json
 import shutil
 from pathlib import Path
 
-from review_lib import read_latest_reviews, resolve_review_paths
+try:
+	from .review_lib import read_latest_reviews, resolve_review_paths
+except ImportError:
+	from review_lib import read_latest_reviews, resolve_review_paths  # type: ignore
 
 
 def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(
 		description="Export a subset of reviewed samples at any time for organizer follow-up."
 	)
-	parser.add_argument("--project-root", default=None, help="cellular_quality project root")
+	parser.add_argument("--project-root", default=None, help="trajectory_annotation_studio project root")
 	parser.add_argument("--result-root", default=None, help="Override result root")
 	parser.add_argument("--review-root", default=None, help="Override review ledger root")
 	parser.add_argument("--export-root", default=None, help="Override export root base")

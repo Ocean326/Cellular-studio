@@ -4,26 +4,35 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sys
 from pathlib import Path
 
 
 SCRIPT_ROOT = Path(__file__).resolve().parents[1]
 WEB_ROOT = SCRIPT_ROOT / "web"
 
-import sys
-
-if str(WEB_ROOT) not in sys.path:
-	sys.path.insert(0, str(WEB_ROOT))
-
-from review_lib import (
-	get_aggregate_dir,
-	get_legacy_timeline_annotations_dir,
-	get_reviewers_dir,
-	load_ledger,
-	resolve_review_paths,
-	write_review,
-	write_timeline_annotations,
-)
+try:
+	from ..web.review_lib import (
+		get_aggregate_dir,
+		get_legacy_timeline_annotations_dir,
+		get_reviewers_dir,
+		load_ledger,
+		resolve_review_paths,
+		write_review,
+		write_timeline_annotations,
+	)
+except ImportError:
+	if str(WEB_ROOT) not in sys.path:
+		sys.path.insert(0, str(WEB_ROOT))
+	from review_lib import (  # type: ignore
+		get_aggregate_dir,
+		get_legacy_timeline_annotations_dir,
+		get_reviewers_dir,
+		load_ledger,
+		resolve_review_paths,
+		write_review,
+		write_timeline_annotations,
+	)
 
 
 def parse_args() -> argparse.Namespace:

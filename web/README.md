@@ -1,20 +1,48 @@
-# 信令轨迹演示、审核与 accepted 导出
+# 信令轨迹演示、审核与导出
 
 ## 启动方式
 
-推荐直接使用本目录下的轻量 review server，在**项目根目录**（`cellular_quality`）执行：
+在仓库根目录执行：
 
 ```bash
-cd /path/to/cellular_quality
-python src/web/review_server.py --port 8000
+cd /path/to/trajectory_annotation_studio
+python3 web/review_server.py --port 8000
 ```
 
-然后打开浏览器访问：`http://127.0.0.1:8000/web/index.html`
+如果要直接挂共享 `review_batches/` 根目录，推荐：
+
+```bash
+cd /path/to/trajectory_annotation_studio
+python3 scripts/start_review_studio.py --port 8016
+```
+
+打开浏览器访问：
+
+- `http://127.0.0.1:8000/web/index.html`
+- `http://127.0.0.1:8016/web/index.html`
+
+如果要做包入口 smoke，可在仓库父目录执行：
+
+```bash
+cd /path/to
+python3 -m trajectory_annotation_studio.web.review_server --help
+```
+
+页面稳定 bootstrap 配置现已抽到：
+
+- [app/studio_bootstrap.js](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/web/app/studio_bootstrap.js)
+- [app/features/studio_admin/studio_management_core.js](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/web/app/features/studio_admin/studio_management_core.js)
+
+当前原则是：
+
+- `index.html` 继续保留主交互与运行态
+- 纯配置、稳定 preset、启动常量优先放进 `web/app/`
+- `studio_admin` 域内的格式合同、normalize、API adapter 优先外置，页面壳先保留 orchestrator 与兼容桥
 
 若只想看静态页面，也可以继续使用：
 
 ```bash
-python -m http.server 8000
+python3 -m http.server 8000
 ```
 
 但这种方式不会提供审核写回接口，页面中的审核保存会不可用。
@@ -38,9 +66,9 @@ python -m http.server 8000
 
 ## 数据依赖
 
-需先运行 `Pipeline_demo.py` 生成 `data/result/{uid}/` 下的 CSV。OD 优先从 `data/result/{uid}/od.csv` 读取，若无则回退到 `data/OD/od_{uid}.csv`。
+需先准备 `data/result/{uid}/` 下的 CSV 或共享批次根下的 `result/` 目录。OD 优先从 `data/result/{uid}/od.csv` 读取，若无则回退到 `data/OD/od_{uid}.csv`。
 
-若已有 `data/result/` 但无 `manifest.json`，可运行 `python web/gen_manifest.py` 生成。该脚本会同时生成 `manifest.json` 和 `states_index.json`（预计算各 uid 的 road/subway/railway/unmatch/stay 标签），用于**状态筛选时 instant 生效**；否则需按需解析 fmm/line/od，筛选会较慢。
+若已有 `data/result/` 但无 `manifest.json`，可运行 `python3 web/gen_manifest.py` 生成。该脚本会同时生成 `manifest.json` 和 `states_index.json`（预计算各 uid 的 road/subway/railway/unmatch/stay 标签），用于**状态筛选时即时生效**；否则需按需解析 `fmm/line/od`，筛选会较慢。
 
 ## 审核 ledger 与 accepted 导出
 
@@ -52,7 +80,7 @@ python -m http.server 8000
 accepted 导出 CLI：
 
 ```bash
-python src/web/export_accepted_assets.py --clean
+python3 web/export_accepted_assets.py --clean
 ```
 
 导出结果会整理为：
@@ -68,3 +96,5 @@ python src/web/export_accepted_assets.py --clean
 - 状态筛选会按需读取对应 UID 的 `fmm/line/od` 数据并缓存结果。首次筛选时若 UID 数较多，可能有短暂等待。
 - 修改图层样式、状态样式或图层顺序后，会自动失效旧渲染缓存并按新样式重绘。
 - review server 只面向本地 organizer 使用，不包含鉴权与并发冲突处理。
+- 最小前端 smoke 可运行：`python3 scripts/check_index_html_inline_js.py`
+  现在会同时检查 `index.html` 的 inline script 和本地 `src` 脚本

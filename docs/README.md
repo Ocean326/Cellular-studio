@@ -40,6 +40,16 @@
   把首轮真实执行压成可复用复盘，并明确第二轮优先级和不建议现在就做的事。
 - [19-异构多图层轨迹接入架构与Arena-V15适配.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/19-%E5%BC%82%E6%9E%84%E5%A4%9A%E5%9B%BE%E5%B1%82%E8%BD%A8%E8%BF%B9%E6%8E%A5%E5%85%A5%E6%9E%B6%E6%9E%84%E4%B8%8EArena-V15%E9%80%82%E9%85%8D.md)
   说明 manifest 驱动的异构图层合同、review reference 兼容策略，以及 `research_arena` V1.5 的 GPS+tier1-4 接入方式。
+- [20-阶段性仓库代码架构体检与治理升级方案.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/20-%E9%98%B6%E6%AE%B5%E6%80%A7%E4%BB%93%E5%BA%93%E4%BB%A3%E7%A0%81%E6%9E%B6%E6%9E%84%E4%BD%93%E6%A3%80%E4%B8%8E%E6%B2%BB%E7%90%86%E5%8D%87%E7%BA%A7%E6%96%B9%E6%A1%88.md)
+  面向当前代码库的阶段性体检报告，覆盖仓库健康、代码健康、架构风险、治理机制与分阶段升级路线。
+- [21-用户自助上传与批次产品化升级规划.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/21-%E7%94%A8%E6%88%B7%E8%87%AA%E5%8A%A9%E4%B8%8A%E4%BC%A0%E4%B8%8E%E6%89%B9%E6%AC%A1%E4%BA%A7%E5%93%81%E5%8C%96%E5%8D%87%E7%BA%A7%E8%A7%84%E5%88%92.md)
+  聚焦自主上传、处理、打开、可见性与产品化升级边界，明确 Studio 管理模块的目标与分期。
+- [22-index前端模块化重构方案.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/22-index%E5%89%8D%E7%AB%AF%E6%A8%A1%E5%9D%97%E5%8C%96%E9%87%8D%E6%9E%84%E6%96%B9%E6%A1%88.md)
+  说明 `index.html` 从单文件壳体过渡到 `web/app/* + web/styles/*` 模块结构时的目标、边界和切分方法。
+- [23-index前端重构落地计划.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/23-index%E5%89%8D%E7%AB%AF%E9%87%8D%E6%9E%84%E8%90%BD%E5%9C%B0%E8%AE%A1%E5%88%92.md)
+  把模块化前端重构拆成可执行阶段，明确先后顺序、兼容要求与验证面。
+- [24-20260420小版本更新与179重部署说明.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/24-20260420%E5%B0%8F%E7%89%88%E6%9C%AC%E6%9B%B4%E6%96%B0%E4%B8%8E179%E9%87%8D%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E.md)
+  汇总这轮前端、上传、批次合同与仓库治理升级的高信号改动，并记录 179 重部署前的兼容性与验证结论。
 
 ## 当前定位
 

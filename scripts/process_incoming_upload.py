@@ -4,7 +4,10 @@ import argparse
 import json
 from pathlib import Path
 
-from server_batch_lib import intake_upload_bundle
+try:
+	from .server_batch_lib import intake_upload_bundle
+except ImportError:
+	from server_batch_lib import intake_upload_bundle  # type: ignore
 
 
 def parse_args() -> argparse.Namespace:

@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-
-THIS_DIR = Path(__file__).resolve().parent
-SCRIPTS_DIR = THIS_DIR.parents[1] / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-	sys.path.insert(0, str(SCRIPTS_DIR))
-
-from adapt_research_arena_v15_layers_batch import build_layered_batch
+from ..adapt_research_arena_v15_layers_batch import build_layered_batch
 
 
 class ResearchArenaV15LayerAdapterTest(unittest.TestCase):

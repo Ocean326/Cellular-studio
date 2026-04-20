@@ -5,7 +5,10 @@ import argparse
 import json
 from pathlib import Path
 
-from server_batch_lib import publish_batch, read_json, resolve_result_root
+try:
+	from .server_batch_lib import publish_batch, read_json, resolve_result_root
+except ImportError:
+	from server_batch_lib import publish_batch, read_json, resolve_result_root  # type: ignore
 
 
 def parse_args() -> argparse.Namespace:

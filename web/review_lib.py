@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import shutil
+import sys
 import tempfile
 import zipfile
 from dataclasses import asdict, dataclass, field
@@ -13,9 +14,26 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
+try:
+	from ..batch_contract import (
+		DEFAULT_RESULT_FILES,
+		dedupe_preserve_order,
+		get_manifest_layer_filenames,
+		get_manifest_review_reference_filenames,
+	)
+except ImportError:
+	REPO_ROOT = Path(__file__).resolve().parents[1]
+	if str(REPO_ROOT) not in sys.path:
+		sys.path.insert(0, str(REPO_ROOT))
+	from batch_contract import (  # type: ignore
+		DEFAULT_RESULT_FILES,
+		dedupe_preserve_order,
+		get_manifest_layer_filenames,
+		get_manifest_review_reference_filenames,
+	)
+
 
 VALID_DECISIONS = frozenset({"accept", "reject", "skip"})
-LEGACY_REFERENCE_FILES = ("line.csv", "fmm.csv")
 
 SCHEMA_VERSION = 2
 
@@ -144,18 +162,6 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 	tmp_path.replace(path)
 
 
-def _dedupe_preserve_order(items: list[str]) -> list[str]:
-	seen: set[str] = set()
-	result: list[str] = []
-	for item in items:
-		value = str(item or "").strip()
-		if not value or value in seen:
-			continue
-		seen.add(value)
-		result.append(value)
-	return result
-
-
 def _read_result_manifest(result_root: str | Path) -> dict[str, Any]:
 	manifest_path = Path(result_root) / "manifest.json"
 	if not manifest_path.exists():
@@ -166,61 +172,15 @@ def _read_result_manifest(result_root: str | Path) -> dict[str, Any]:
 		return {}
 
 
-def _normalize_manifest_layer_specs(manifest_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
-	layer_order = [
-		str(item or "").strip()
-		for item in manifest_payload.get("layers", []) or []
-		if str(item or "").strip()
-	]
-	layer_specs = manifest_payload.get("layer_specs") if isinstance(manifest_payload.get("layer_specs"), dict) else {}
-	legacy_layer_styles = (
-		manifest_payload.get("layer_styles") if isinstance(manifest_payload.get("layer_styles"), dict) else {}
-	)
-	if not layer_order:
-		layer_order = _dedupe_preserve_order([*legacy_layer_styles.keys(), *layer_specs.keys()])
-	specs: dict[str, dict[str, Any]] = {}
-	for layer in layer_order:
-		merged: dict[str, Any] = {}
-		if isinstance(legacy_layer_styles.get(layer), dict):
-			merged.update(legacy_layer_styles[layer])
-		if isinstance(layer_specs.get(layer), dict):
-			merged.update(layer_specs[layer])
-		filename = str(merged.get("filename") or f"{layer}.csv").strip() or f"{layer}.csv"
-		merged["filename"] = filename
-		specs[layer] = merged
-	return specs
-
-
 def get_manifest_review_reference_files(result_root: str | Path) -> list[str]:
 	manifest_payload = _read_result_manifest(result_root)
-	if "review_reference_files" in manifest_payload and isinstance(manifest_payload.get("review_reference_files"), list):
-		reference_files = [
-			str(item or "").strip()
-			for item in manifest_payload.get("review_reference_files", []) or []
-			if str(item or "").strip()
-		]
-		return _dedupe_preserve_order(reference_files)
-	specs = _normalize_manifest_layer_specs(manifest_payload)
-	reference_layers = {
-		str(item or "").strip()
-		for item in manifest_payload.get("review_reference_layers", []) or []
-		if str(item or "").strip()
-	}
-	from_specs = [
-		str(spec.get("filename") or "").strip()
-		for layer, spec in specs.items()
-		if spec.get("review_reference") or layer in reference_layers
-	]
-	if from_specs:
-		return _dedupe_preserve_order(from_specs)
-	return list(LEGACY_REFERENCE_FILES)
+	return get_manifest_review_reference_filenames(manifest_payload)
 
 
 def get_manifest_export_filenames(result_root: str | Path) -> list[str]:
 	manifest_payload = _read_result_manifest(result_root)
-	specs = _normalize_manifest_layer_specs(manifest_payload)
-	declared = [str(spec.get("filename") or "").strip() for spec in specs.values()]
-	return _dedupe_preserve_order(
+	declared = get_manifest_layer_filenames(manifest_payload)
+	return dedupe_preserve_order(
 		[
 			"raw.csv",
 			"snap.csv",
@@ -821,7 +781,7 @@ def _normalize_timeline_segment(item: Any) -> dict[str, Any]:
 		return {}
 	left_time = min(start_time, end_time)
 	right_time = max(start_time, end_time)
-	return {
+	record = {
 		"id": str(item.get("id") or f"segment-{round(left_time)}-{round(right_time)}").strip()
 		or f"segment-{round(left_time)}-{round(right_time)}",
 		"categoryId": str(item.get("categoryId") or "").strip(),
@@ -830,6 +790,25 @@ def _normalize_timeline_segment(item: Any) -> dict[str, Any]:
 		"startTime": left_time,
 		"endTime": right_time,
 	}
+	entry_mode = str(item.get("entryMode") or "").strip()
+	segment_scope = str(item.get("segmentScope") or "").strip()
+	window_start_day = str(item.get("windowStartDay") or "").strip()
+	window_end_day = str(item.get("windowEndDay") or "").strip()
+	source_layer_key = str(item.get("sourceLayerKey") or "").strip()
+	fixed_span_days = parse_numeric_value(item.get("fixedSpanDays"))
+	if entry_mode:
+		record["entryMode"] = entry_mode
+	if segment_scope:
+		record["segmentScope"] = segment_scope
+	if window_start_day:
+		record["windowStartDay"] = window_start_day
+	if window_end_day:
+		record["windowEndDay"] = window_end_day
+	if source_layer_key:
+		record["sourceLayerKey"] = source_layer_key
+	if fixed_span_days is not None:
+		record["fixedSpanDays"] = max(0, int(round(fixed_span_days)))
+	return record
 
 
 def normalize_timeline_annotations_payload(
@@ -912,6 +891,13 @@ def read_timeline_annotations(
 
 def _summarize_timeline_annotations(payload: dict[str, Any]) -> dict[str, Any]:
 	segments = payload.get("segments", [])
+	window_quick_segment_count = sum(
+		1
+		for item in segments
+		if isinstance(item, dict)
+		and str(item.get("entryMode") or "").strip() == "window_quick"
+		and str(item.get("segmentScope") or "").strip() == "date_window"
+	)
 	category_names = sorted(
 		{
 			str(item.get("categoryName") or "").strip()
@@ -925,6 +911,7 @@ def _summarize_timeline_annotations(payload: dict[str, Any]) -> dict[str, Any]:
 		"updated_at": str(payload.get("updated_at") or "").strip(),
 		"pin_count": len(payload.get("pins", []) or []),
 		"segment_count": len(segments or []),
+		"window_quick_segment_count": window_quick_segment_count,
 		"categories": category_names,
 	}
 

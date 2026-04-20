@@ -1,17 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-
-THIS_DIR = Path(__file__).resolve().parent
-if str(THIS_DIR) not in sys.path:
-	sys.path.insert(0, str(THIS_DIR))
-
-from review_lib import (
+from .review_lib import (
 	ensure_reviewer_profile,
 	export_accepted_assets,
 	export_reviewer_bundle,
@@ -148,6 +142,45 @@ class ReviewLibTest(unittest.TestCase):
 			{item["reviewer_id"] for item in aggregate["timeline_annotation_summary"]},
 			{"alice", "bob"},
 		)
+
+	def test_window_quick_segment_metadata_round_trips_and_is_summarized(self) -> None:
+		ensure_reviewer_profile(self.paths, display_name="Alice")
+
+		write_timeline_annotations(
+			self.paths,
+			{
+				"uid": "2002",
+				"reviewer": "Alice",
+				"segments": [
+					{
+						"id": "window:2026-04-10:2026-04-12",
+						"categoryId": "focus",
+						"categoryName": "重点段",
+						"color": "#60a5fa",
+						"startTime": 100,
+						"endTime": 200,
+						"entryMode": "window_quick",
+						"segmentScope": "date_window",
+						"windowStartDay": "2026-04-10",
+						"windowEndDay": "2026-04-12",
+						"fixedSpanDays": 2,
+						"sourceLayerKey": "line",
+					},
+				],
+			},
+		)
+
+		annotations = read_timeline_annotations(self.paths, "2002", reviewer_id="alice")
+		aggregate = get_uid_review_aggregate(self.paths, "2002")
+		segment = annotations["segments"][0]
+
+		self.assertEqual(segment["entryMode"], "window_quick")
+		self.assertEqual(segment["segmentScope"], "date_window")
+		self.assertEqual(segment["windowStartDay"], "2026-04-10")
+		self.assertEqual(segment["windowEndDay"], "2026-04-12")
+		self.assertEqual(segment["fixedSpanDays"], 2)
+		self.assertEqual(segment["sourceLayerKey"], "line")
+		self.assertEqual(aggregate["timeline_annotation_summary"][0]["window_quick_segment_count"], 1)
 
 	def test_export_accepted_assets_is_scoped_per_reviewer(self) -> None:
 		self._write_uid_assets("3001", line=True, fmm=True)

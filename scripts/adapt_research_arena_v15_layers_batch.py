@@ -9,7 +9,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from server_batch_lib import build_batch_metadata, read_json, write_json
+try:
+	from .server_batch_lib import build_batch_metadata, read_json, write_json
+except ImportError:
+	from server_batch_lib import build_batch_metadata, read_json, write_json  # type: ignore
 
 
 LAYER_SOURCES = (
@@ -53,7 +56,7 @@ def parse_args() -> argparse.Namespace:
 		description="Build a trajectory_annotation_studio batch that overlays GPS + V1.5 tier1-4 raw6 layers for the same trajectories."
 	)
 	parser.add_argument("--dataset-root", required=True, help="Research arena V1.5 dataset root")
-	parser.add_argument("--phase", default="dev-public", help="Split phase shared across tiers, for example dev-public")
+	parser.add_argument("--phase", default="dev-public", help="Split phase shared across tiers, or a comma-separated phase list")
 	parser.add_argument("--output-batch-root", required=True, help="Target studio batch root")
 	parser.add_argument("--limit", type=int, default=0, help="Optional max uid count to export")
 	parser.add_argument("--force", action="store_true", help="Replace output batch root if it already exists")
@@ -129,6 +132,13 @@ def load_split_records(split_root: Path) -> dict[str, dict[str, Any]]:
 				"rows": rows_by_uid.get(uid, []),
 			}
 	return records
+
+
+def parse_phase_list(phase: str) -> list[str]:
+	phases = [token.strip() for token in str(phase or "").split(",") if token.strip()]
+	if not phases:
+		raise ValueError("expected at least one phase")
+	return phases
 
 
 def build_gps_rows(uid: str, sample_payload: dict[str, Any], truth_payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -212,13 +222,20 @@ def build_layered_batch(
 	dataset_root = dataset_root.expanduser().resolve()
 	output_batch_root = output_batch_root.expanduser().resolve()
 	ensure_empty_dir(output_batch_root, force=force)
+	phase_list = parse_phase_list(phase)
 
 	split_records: dict[str, dict[str, dict[str, Any]]] = {}
 	for layer_source in LAYER_SOURCES:
-		split_root = dataset_root / "splits" / layer_source["split_dir"] / phase
-		if not split_root.exists():
-			raise FileNotFoundError(f"split root not found: {split_root}")
-		split_records[layer_source["layer_key"]] = load_split_records(split_root)
+		merged_records: dict[str, dict[str, Any]] = {}
+		for phase_name in phase_list:
+			split_root = dataset_root / "splits" / layer_source["split_dir"] / phase_name
+			if not split_root.exists():
+				raise FileNotFoundError(f"split root not found: {split_root}")
+			for uid, payload in load_split_records(split_root).items():
+				if uid in merged_records:
+					raise ValueError(f"duplicate uid across requested phases: {uid}")
+				merged_records[uid] = payload
+		split_records[layer_source["layer_key"]] = merged_records
 
 	common_uids = sorted(
 		set.intersection(*(set(records.keys()) for records in split_records.values()))
@@ -262,6 +279,7 @@ def build_layered_batch(
 				"track_id": f"uid:{uid}",
 				"uid": uid,
 				"sample_id": str(first_layer_record["sample_id"]),
+				"phase": str(first_layer_record["split_name"]).split("/")[-1],
 				"sample_ids_by_layer": layer_samples,
 				"available_layers": ["gps", "tier1", "tier2", "tier3", "tier4"],
 				"stats": {"row_counts": row_counts},
@@ -271,7 +289,7 @@ def build_layered_batch(
 
 	manifest_payload = {
 		"ui_mode": "trajectory_layers",
-		"title": f"Research Arena V1.5 GPS + Tier1-4 对照 ({phase})",
+		"title": f"Research Arena V1.5 GPS + Tier1-4 对照 ({', '.join(phase_list)})",
 		"search_placeholder": "搜索 UID / sample_id / tier 样本...",
 		"filter_title": "按同轨迹多层对照浏览",
 		"filter_source_label": "GPS 真值 + 4 个 raw6 tier",
@@ -355,12 +373,14 @@ def build_layered_batch(
 			"generated_at": utc_now_iso(),
 			"source": "research_arena_v15_layer_adapter",
 			"phase": phase,
+			"phases": phase_list,
 			"count": len(track_manifest_tracks),
 			"tracks": track_manifest_tracks,
 		},
 	)
 	source_batch_payload = read_json(output_batch_root / "source_batch.json")
 	source_batch_payload["phase"] = phase
+	source_batch_payload["phases"] = phase_list
 	source_batch_payload["layer_sources"] = [
 		{
 			"layer_key": layer_source["layer_key"],
@@ -375,6 +395,7 @@ def build_layered_batch(
 		"generated_at": utc_now_iso(),
 		"dataset_root": str(dataset_root),
 		"phase": phase,
+		"phases": phase_list,
 		"output_batch_root": str(output_batch_root),
 		"uid_count": len(common_uids),
 		"uids": common_uids,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import threading
 import unittest
@@ -10,13 +9,8 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-
-THIS_DIR = Path(__file__).resolve().parent
-if str(THIS_DIR) not in sys.path:
-	sys.path.insert(0, str(THIS_DIR))
-
-from review_lib import resolve_review_paths
-from review_server import ReviewRequestHandler
+from .review_lib import resolve_review_paths
+from .review_server import ReviewRequestHandler
 
 
 class ReviewServerApiTest(unittest.TestCase):
@@ -109,6 +103,20 @@ class ReviewServerApiTest(unittest.TestCase):
 				raise
 			return body
 
+	def _fetch_raw(self, method: str, path: str, headers: dict | None = None) -> tuple[int, str]:
+		request = Request(
+			f"http://127.0.0.1:{self.port}{path}",
+			headers=dict(headers or {}),
+			method=method,
+		)
+		try:
+			with urlopen(request, timeout=5) as response:
+				return response.status, response.read().decode("utf-8")
+		except HTTPError as exc:
+			body = exc.read().decode("utf-8")
+			exc.close()
+			return exc.code, body
+
 	def test_session_review_aggregate_and_export_flow(self) -> None:
 		alice = self._request("POST", "/api/reviewers/session", {"display_name": "Alice"})["reviewer"]
 		bob = self._request("POST", "/api/reviewers/session", {"display_name": "Bob"})["reviewer"]
@@ -168,6 +176,47 @@ class ReviewServerApiTest(unittest.TestCase):
 		self.assertEqual(bundle["sample_count"], 1)
 		self.assertTrue(Path(bundle["bundle_root"]).exists())
 		self.assertTrue(Path(bundle["zip_path"]).exists())
+
+	def test_timeline_annotations_preserve_window_quick_segment_metadata(self) -> None:
+		alice = self._request("POST", "/api/reviewers/session", {"display_name": "Alice"})["reviewer"]
+
+		self._request(
+			"POST",
+			"/api/timeline-annotations",
+			{
+				"uid": "6001",
+				"reviewer_id": alice["reviewer_id"],
+				"reviewer_name": alice["reviewer_name"],
+				"segments": [
+					{
+						"id": "window:2026-04-10:2026-04-12",
+						"categoryId": "focus",
+						"categoryName": "重点段",
+						"color": "#60a5fa",
+						"startTime": 100,
+						"endTime": 200,
+						"entryMode": "window_quick",
+						"segmentScope": "date_window",
+						"windowStartDay": "2026-04-10",
+						"windowEndDay": "2026-04-12",
+						"fixedSpanDays": 2,
+						"sourceLayerKey": "line",
+					},
+				],
+			},
+		)
+
+		annotations = self._request("GET", f"/api/timeline-annotations?uid=6001&reviewer_id={alice['reviewer_id']}")["annotations"]
+		aggregate = self._request("GET", "/api/timeline-annotations/aggregate?uid=6001")["aggregate"]
+		segment = annotations["segments"][0]
+
+		self.assertEqual(segment["entryMode"], "window_quick")
+		self.assertEqual(segment["segmentScope"], "date_window")
+		self.assertEqual(segment["windowStartDay"], "2026-04-10")
+		self.assertEqual(segment["windowEndDay"], "2026-04-12")
+		self.assertEqual(segment["fixedSpanDays"], 2)
+		self.assertEqual(segment["sourceLayerKey"], "line")
+		self.assertEqual(aggregate["annotations"][0]["window_quick_segment_count"], 1)
 
 	def test_admin_incoming_upload_and_list(self) -> None:
 		initial = self._request("GET", "/api/admin/incoming")
@@ -262,6 +311,339 @@ class ReviewServerApiTest(unittest.TestCase):
 
 		self.assertEqual(batch["ui_config"]["annotation_enabled"], False)
 		self.assertEqual(batch["ui_config"]["layer_specs"]["raw"]["defaultColor"], "#123456")
+
+	def test_api_me_returns_actor_identity(self) -> None:
+		payload = self._request(
+			"GET",
+			"/api/me",
+			headers={
+				"X-Forwarded-User": "alice.demo@example.com",
+				"X-Display-Name": "Alice Demo",
+				"X-Actor-Role": "annotator",
+			},
+		)
+
+		self.assertEqual(payload["actor"]["actor_id"], "alice-demo")
+		self.assertEqual(payload["actor"]["display_name"], "Alice Demo")
+		self.assertEqual(payload["actor"]["role"], "annotator")
+
+	def test_user_upload_private_batch_is_owner_scoped_and_batch_data_is_protected(self) -> None:
+		headers = {
+			"X-Forwarded-User": "alice@example.com",
+			"X-Display-Name": "Alice",
+		}
+		created = self._request(
+			"POST",
+			"/api/uploads",
+			{
+				"upload_type": "trajectory4",
+				"visibility_scope": "owner_only",
+				"annotation_mode": "annotatable",
+				"display_name": "Alice Trajectory4",
+				"original_name": "alice_traj.csv",
+			},
+			headers=headers,
+			expect_status=201,
+		)["upload"]
+		csv_payload = (
+			"uid,latitude,longitude,timestamp_ms,status\n"
+			"u1001,39.901,116.391,1713340800000,stay\n"
+			"u1001,39.902,116.392,1713340860000,walking\n"
+		).encode("utf-8")
+		self._request(
+			"POST",
+			f"/api/uploads/{created['upload_id']}/blob",
+			payload=csv_payload,
+			headers={
+				**headers,
+				"Content-Type": "text/csv",
+				"X-Upload-Filename": "alice_traj.csv",
+			},
+			expect_status=201,
+		)
+		published = self._request(
+			"POST",
+			f"/api/uploads/{created['upload_id']}/process",
+			headers=headers,
+		)["upload"]
+
+		owner_batches = self._request("GET", "/api/batches", headers=headers)["batches"]
+		other_batches = self._request(
+			"GET",
+			"/api/batches",
+			headers={"X-Forwarded-User": "bob@example.com", "X-Display-Name": "Bob"},
+		)["batches"]
+		allowed_status, allowed_manifest = self._fetch_raw(
+			"GET",
+			f"/batch-data/{published['batch_name']}/manifest.json",
+			headers=headers,
+		)
+		denied_status, _ = self._fetch_raw(
+			"GET",
+			f"/batch-data/{published['batch_name']}/manifest.json",
+			headers={"X-Forwarded-User": "bob@example.com", "X-Display-Name": "Bob"},
+		)
+
+		self.assertEqual(published["status"], "published")
+		self.assertTrue(any(batch["name"] == published["batch_name"] for batch in owner_batches))
+		self.assertFalse(any(batch["name"] == published["batch_name"] for batch in other_batches))
+		self.assertEqual(allowed_status, 200)
+		self.assertIn('"gps.csv"', allowed_manifest)
+		self.assertEqual(denied_status, 404)
+
+	def test_user_upload_public_view_only_batch_can_be_listed_and_soft_deleted(self) -> None:
+		headers = {
+			"X-Forwarded-User": "carol@example.com",
+			"X-Display-Name": "Carol",
+		}
+		created = self._request(
+			"POST",
+			"/api/uploads",
+			{
+				"upload_type": "signal6",
+				"visibility_scope": "public",
+				"annotation_mode": "view_only",
+				"display_name": "Carol Signal6",
+				"original_name": "carol_signal.csv",
+			},
+			headers=headers,
+			expect_status=201,
+		)["upload"]
+		csv_payload = (
+			"uid,cid,lat,lon,t_in,t_out,status\n"
+			"s2001,1101,39.9042,116.4074,1713340800000,1713340980000,road\n"
+		).encode("utf-8")
+		self._request(
+			"POST",
+			f"/api/uploads/{created['upload_id']}/blob",
+			payload=csv_payload,
+			headers={
+				**headers,
+				"Content-Type": "text/csv",
+				"X-Upload-Filename": "carol_signal.csv",
+			},
+			expect_status=201,
+		)
+		published = self._request(
+			"POST",
+			f"/api/uploads/{created['upload_id']}/process",
+			headers=headers,
+		)["upload"]
+
+		public_batches = self._request(
+			"GET",
+			"/api/batches",
+			headers={"X-Forwarded-User": "dave@example.com", "X-Display-Name": "Dave"},
+		)["batches"]
+		public_batch = next(batch for batch in public_batches if batch["name"] == published["batch_name"])
+		self.assertEqual(public_batch["visibility_scope"], "public")
+		self.assertEqual(public_batch["annotation_mode"], "view_only")
+		self.assertEqual(public_batch["ui_config"]["annotation_enabled"], False)
+		self.assertEqual(public_batch["ui_config"]["hide_review_panel"], True)
+
+		deleted = self._request(
+			"DELETE",
+			f"/api/uploads/{created['upload_id']}",
+			headers=headers,
+		)
+		remaining_batches = self._request("GET", "/api/batches", headers=headers)["batches"]
+		status_code, _ = self._fetch_raw(
+			"GET",
+			f"/batch-data/{published['batch_name']}/manifest.json",
+			headers=headers,
+		)
+		uploads = self._request("GET", "/api/uploads", headers=headers)["items"]
+		upload_record = next(item for item in uploads if item["upload_id"] == created["upload_id"])
+
+		self.assertEqual(deleted["status"], "deleted")
+		self.assertFalse(any(batch["name"] == published["batch_name"] for batch in remaining_batches))
+		self.assertEqual(status_code, 404)
+		self.assertEqual(upload_record["status"], "deleted")
+
+	def test_user_upload_full_flow_supports_publish_open_and_delete(self) -> None:
+		headers = {
+			"X-Forwarded-User": "flow@example.com",
+			"X-Display-Name": "Flow Tester",
+		}
+		created = self._request(
+			"POST",
+			"/api/uploads",
+			{
+				"upload_type": "trajectory4",
+				"visibility_scope": "owner_only",
+				"annotation_mode": "annotatable",
+				"display_name": "Flow Trajectory4",
+				"original_name": "flow_traj.csv",
+			},
+			headers=headers,
+			expect_status=201,
+		)["upload"]
+		csv_payload = (
+			"uid,latitude,longitude,timestamp_ms,status\n"
+			"flow1001,39.901,116.391,1713340800000,stay\n"
+			"flow1001,39.902,116.392,1713340860000,walking\n"
+		).encode("utf-8")
+		self._request(
+			"POST",
+			f"/api/uploads/{created['upload_id']}/blob",
+			payload=csv_payload,
+			headers={
+				**headers,
+				"Content-Type": "text/csv",
+				"X-Upload-Filename": "flow_traj.csv",
+			},
+			expect_status=201,
+		)
+		published = self._request(
+			"POST",
+			f"/api/uploads/{created['upload_id']}/process",
+			headers=headers,
+		)["upload"]
+
+		batches = self._request("GET", "/api/batches", headers=headers)["batches"]
+		selected_batch = next(batch for batch in batches if batch["name"] == published["batch_name"])
+		health = self._request("GET", f"/api/health?batch={published['batch_name']}", headers=headers)
+		manifest_status, manifest = self._fetch_raw(
+			"GET",
+			f"/batch-data/{published['batch_name']}/manifest.json",
+			headers=headers,
+		)
+
+		self.assertEqual(published["status"], "published")
+		self.assertEqual(selected_batch["name"], published["batch_name"])
+		self.assertEqual(health["batch"], published["batch_name"])
+		self.assertEqual(manifest_status, 200)
+		self.assertIn('"gps.csv"', manifest)
+
+		deleted = self._request(
+			"DELETE",
+			f"/api/uploads/{created['upload_id']}",
+			headers=headers,
+		)
+		remaining_batches = self._request("GET", "/api/batches", headers=headers)["batches"]
+		manifest_status_after_delete, _ = self._fetch_raw(
+			"GET",
+			f"/batch-data/{published['batch_name']}/manifest.json",
+			headers=headers,
+		)
+		uploads = self._request("GET", "/api/uploads", headers=headers)["items"]
+		upload_record = next(item for item in uploads if item["upload_id"] == created["upload_id"])
+
+		self.assertEqual(deleted["status"], "deleted")
+		self.assertFalse(any(batch["name"] == published["batch_name"] for batch in remaining_batches))
+		self.assertEqual(manifest_status_after_delete, 404)
+		self.assertEqual(upload_record["status"], "deleted")
+
+	def test_user_upload_process_accepts_case_insensitive_headers(self) -> None:
+		headers = {
+			"X-Forwarded-User": "erin@example.com",
+			"X-Display-Name": "Erin",
+		}
+		created = self._request(
+			"POST",
+			"/api/uploads",
+			{
+				"upload_type": "signal6",
+				"visibility_scope": "private",
+				"annotation_mode": "annotatable",
+				"display_name": "Erin Signal6 Casefold",
+				"original_name": "erin_signal_casefold.csv",
+			},
+			headers=headers,
+			expect_status=201,
+		)["upload"]
+		csv_payload = (
+			"UID,CID,Lat,Lon,TIn,TOut,Status\n"
+			"s2601,1101,39.9042,116.4074,1713340800000,1713340980000,road\n"
+			"s2601,1102,39.9142,116.4174,1713340980000,1713341160000,subway\n"
+		).encode("utf-8")
+		self._request(
+			"POST",
+			f"/api/uploads/{created['upload_id']}/blob",
+			payload=csv_payload,
+			headers={
+				**headers,
+				"Content-Type": "text/csv",
+				"X-Upload-Filename": "erin_signal_casefold.csv",
+			},
+			expect_status=201,
+		)
+		published = self._request(
+			"POST",
+			f"/api/uploads/{created['upload_id']}/process",
+			headers=headers,
+		)["upload"]
+
+		status_code, manifest = self._fetch_raw(
+			"GET",
+			f"/batch-data/{published['batch_name']}/manifest.json",
+			headers=headers,
+		)
+
+		self.assertEqual(published["status"], "published")
+		self.assertEqual(status_code, 200)
+		self.assertIn('"signal.csv"', manifest)
+
+	def test_user_upload_process_applies_custom_field_mapping(self) -> None:
+		headers = {
+			"X-Forwarded-User": "frank@example.com",
+			"X-Display-Name": "Frank",
+		}
+		created = self._request(
+			"POST",
+			"/api/uploads",
+			{
+				"upload_type": "signal6",
+				"visibility_scope": "private",
+				"annotation_mode": "annotatable",
+				"display_name": "Frank Signal6 Custom Mapping",
+				"original_name": "frank_signal_custom.csv",
+				"field_mapping": {
+					"uid": "subscriberId",
+					"cid": "cellCode",
+					"latitude": "gpsLat",
+					"longitude": "gpsLon",
+					"t_in": "procedureStartTime",
+					"t_out": "proceduereEndTime",
+					"status": "sceneType",
+				},
+			},
+			headers=headers,
+			expect_status=201,
+		)["upload"]
+		csv_payload = (
+			"subscriberId,cellCode,gpsLat,gpsLon,procedureStartTime,proceduereEndTime,sceneType\n"
+			"s2701,1101,39.9042,116.4074,1713340800000,1713340980000,road\n"
+		).encode("utf-8")
+		self._request(
+			"POST",
+			f"/api/uploads/{created['upload_id']}/blob",
+			payload=csv_payload,
+			headers={
+				**headers,
+				"Content-Type": "text/csv",
+				"X-Upload-Filename": "frank_signal_custom.csv",
+			},
+			expect_status=201,
+		)
+		published = self._request(
+			"POST",
+			f"/api/uploads/{created['upload_id']}/process",
+			headers=headers,
+		)["upload"]
+		uploads = self._request("GET", "/api/uploads", headers=headers)["items"]
+		upload_record = next(item for item in uploads if item["upload_id"] == created["upload_id"])
+		status_code, manifest = self._fetch_raw(
+			"GET",
+			f"/batch-data/{published['batch_name']}/manifest.json",
+			headers=headers,
+		)
+
+		self.assertEqual(published["status"], "published")
+		self.assertEqual(status_code, 200)
+		self.assertIn('"signal.csv"', manifest)
+		self.assertEqual(upload_record["field_mapping"]["uid"], ["subscriber_id"])
+		self.assertIn("t_out", upload_record["field_mapping"])
 
 
 if __name__ == "__main__":

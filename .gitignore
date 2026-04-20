@@ -28,6 +28,8 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 node_modules/
+.runtime/
+test-results/
 
 # Local data
 project_data/

@@ -28,7 +28,7 @@
 - [docs/](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs)
   需求、规划、治理、部署与接入文档
 - [adapters/](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/adapters)
-  各类数据源或个人数据接入适配器约定
+  各类数据源或个人数据接入适配器约定，内含可复制的 `template/`
 
 ## 协作模型
 
@@ -48,19 +48,35 @@
 
 ## 运行方式
 
-在项目根目录执行：
+最常用有两种启动方式。
+
+单批次 / 本地开发模式：
 
 ```bash
 cd /Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio
 python3 web/review_server.py --port 8016
 ```
 
-打开：
+共享批次根模式：
+
+```bash
+cd /Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio
+python3 scripts/start_review_studio.py --port 8016
+```
+
+打开入口：
 
 - `http://127.0.0.1:8016/web/index.html`
 
 首次进入 reviewer 模式时，页面会要求输入 `姓名/昵称`，作为当前批次里的标注来源。
 这是一层轻量 `reviewer session`，用于命名空间隔离和多人汇总，不是权限鉴权。
+
+如果要做包入口 smoke 或 CI 校验，可在父目录执行：
+
+```bash
+cd /Users/ocean/Documents/Playground/Cellular-projects
+python3 -m trajectory_annotation_studio.web.review_server --help
+```
 
 如果需要指定数据位置，可以显式传参：
 
@@ -147,6 +163,8 @@ python3 scripts/start_review_studio.py --port 8016
   记录真实 179 试运行中暴露的约束、已验证路径和后续优化点
 - [docs/18-179试运行复盘与第二轮优化建议.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/18-179%E8%AF%95%E8%BF%90%E8%A1%8C%E5%A4%8D%E7%9B%98%E4%B8%8E%E7%AC%AC%E4%BA%8C%E8%BD%AE%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE.md)
   把首轮真实试运行压成下一轮的执行清单，避免重复踩坑
+- [docs/20-阶段性仓库代码架构体检与治理升级方案.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/20-%E9%98%B6%E6%AE%B5%E6%80%A7%E4%BB%93%E5%BA%93%E4%BB%A3%E7%A0%81%E6%9E%B6%E6%9E%84%E4%BD%93%E6%A3%80%E4%B8%8E%E6%B2%BB%E7%90%86%E5%8D%87%E7%BA%A7%E6%96%B9%E6%A1%88.md)
+  当前这版阶段性体检、风险分级、治理机制和升级路线
 
 ## 当前 reviewer 命名空间模型
 
@@ -204,12 +222,33 @@ python3 scripts/migrate_legacy_review_namespace.py --review-root /path/to/batch/
 - 本地路径覆盖配置
 - 本地备份与 scratch 目录
 
+## 仓库健康基线
+
+当前主干固定执行以下轻量规则：
+
+- `.runtime/` 只放本机运行时脚本、pid 和日志，已默认忽略，不作为共享资产。
+- `_backup_*` 只作为历史归档快照，只读保留，不再作为当前实现的一部分继续演进。
+- `web/` 与 `scripts/` 入口同时兼容“模块运行”和“直接脚本运行”，但测试不再依赖手工 `sys.path` 兜底。
+- `web/app/studio_bootstrap.js` 承担前端稳定 bootstrap 配置层，`index.html` 继续保留主交互壳体。
+- `adapters/template/` 是当前默认 adapter 起点，接新数据优先复制模板而不是改核心壳体。
+- 仓库最小护栏固化在 [repo-health.yml](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/.github/workflows/repo-health.yml)。
+
+提交前建议至少跑：
+
+```bash
+cd /Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio
+python3 -m unittest web.test_review_lib web.test_review_server scripts.tests.test_server_batch_tools scripts.tests.test_research_arena_v15_layer_adapter scripts.tests.test_adapter_template
+python3 scripts/check_index_html_inline_js.py
+```
+
 ## 当前目录取舍
 
 为避免两套服务形态并存，原先新架构的目录已整体备份：
 
 - `_backup_web_20260410_222758/`
 - `_backup_new_stack_20260410_223335/`
+
+这些目录现在视为“只读归档”，用于回溯，不再接受日常功能修改。后续若还需要做大备份，优先移到仓外或独立 archive 位置。
 
 其中 `_backup_new_stack_20260410_223335/` 保存了此前的：
 

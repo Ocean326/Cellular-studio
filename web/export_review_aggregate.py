@@ -3,7 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 
-from review_lib import export_review_aggregate, resolve_review_paths
+try:
+	from .review_lib import export_review_aggregate, resolve_review_paths
+except ImportError:
+	from review_lib import export_review_aggregate, resolve_review_paths  # type: ignore
 
 
 def parse_args() -> argparse.Namespace:

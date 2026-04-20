@@ -3,15 +3,30 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import tempfile
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
-DEFAULT_RESULT_FILES = ("raw.csv", "snap.csv", "od.csv", "fmm.csv", "line.csv")
-LEGACY_REVIEW_REFERENCE_FILES = ("line.csv", "fmm.csv")
+try:
+	from ..batch_contract import (
+		DEFAULT_RESULT_FILES,
+		LEGACY_REVIEW_REFERENCE_FILES,
+		get_manifest_layer_filenames,
+		get_manifest_review_reference_filenames,
+	)
+except ImportError:
+	REPO_ROOT = Path(__file__).resolve().parents[1]
+	if str(REPO_ROOT) not in sys.path:
+		sys.path.insert(0, str(REPO_ROOT))
+	from batch_contract import (  # type: ignore
+		DEFAULT_RESULT_FILES,
+		LEGACY_REVIEW_REFERENCE_FILES,
+		get_manifest_layer_filenames,
+		get_manifest_review_reference_filenames,
+	)
 
 
 def utc_now_iso() -> str:
@@ -37,87 +52,6 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 		handle.write("\n")
 		tmp_path = Path(handle.name)
 	tmp_path.replace(path)
-
-
-def _dedupe_preserve_order(items: list[str]) -> list[str]:
-	seen: set[str] = set()
-	result: list[str] = []
-	for item in items:
-		value = str(item or "").strip()
-		if not value or value in seen:
-			continue
-		seen.add(value)
-		result.append(value)
-	return result
-
-
-def _normalize_manifest_layer_specs(manifest_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
-	layer_order = [
-		str(item or "").strip()
-		for item in manifest_payload.get("layers", []) or []
-		if str(item or "").strip()
-	]
-	layer_specs = manifest_payload.get("layer_specs") if isinstance(manifest_payload.get("layer_specs"), dict) else {}
-	legacy_layer_styles = (
-		manifest_payload.get("layer_styles") if isinstance(manifest_payload.get("layer_styles"), dict) else {}
-	)
-	if not layer_order:
-		layer_order = _dedupe_preserve_order(
-			[
-				*legacy_layer_styles.keys(),
-				*layer_specs.keys(),
-			]
-		)
-	specs: dict[str, dict[str, Any]] = {}
-	for layer in layer_order:
-		merged: dict[str, Any] = {}
-		if isinstance(legacy_layer_styles.get(layer), dict):
-			merged.update(legacy_layer_styles[layer])
-		if isinstance(layer_specs.get(layer), dict):
-			merged.update(layer_specs[layer])
-		filename = str(merged.get("filename") or f"{layer}.csv").strip() or f"{layer}.csv"
-		merged["filename"] = filename
-		specs[layer] = merged
-	return specs
-
-
-def get_manifest_layer_filenames(manifest_payload: dict[str, Any]) -> list[str]:
-	specs = _normalize_manifest_layer_specs(manifest_payload)
-	if specs:
-		return _dedupe_preserve_order([str(spec.get("filename") or "").strip() for spec in specs.values()])
-	layers = [
-		str(item or "").strip()
-		for item in manifest_payload.get("layers", []) or []
-		if str(item or "").strip()
-	]
-	if layers:
-		return _dedupe_preserve_order([f"{layer}.csv" for layer in layers])
-	return list(DEFAULT_RESULT_FILES)
-
-
-def get_manifest_review_reference_filenames(manifest_payload: dict[str, Any]) -> list[str]:
-	if "review_reference_files" in manifest_payload and isinstance(manifest_payload.get("review_reference_files"), list):
-		reference_files = [
-			str(item or "").strip()
-			for item in manifest_payload.get("review_reference_files", []) or []
-			if str(item or "").strip()
-		]
-		return _dedupe_preserve_order(reference_files)
-
-	specs = _normalize_manifest_layer_specs(manifest_payload)
-	reference_layers = {
-		str(item or "").strip()
-		for item in manifest_payload.get("review_reference_layers", []) or []
-		if str(item or "").strip()
-	}
-	from_specs = [
-		str(spec.get("filename") or "").strip()
-		for layer, spec in specs.items()
-		if spec.get("review_reference") or layer in reference_layers
-	]
-	if from_specs:
-		return _dedupe_preserve_order(from_specs)
-	return list(LEGACY_REVIEW_REFERENCE_FILES)
 
 
 def ensure_dir(path: Path, dry_run: bool = False) -> dict[str, str]:
@@ -476,6 +410,7 @@ def build_batch_metadata(
 	status: str = "published",
 	result_mode: str = "mounted",
 	uid_count: int | None = None,
+	extra_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
 	payload = {
 		"name": batch_name,
@@ -495,6 +430,8 @@ def build_batch_metadata(
 		payload["shard_count"] = int(shard_count)
 	if uid_count is not None:
 		payload["uid_count"] = int(uid_count)
+	if extra_metadata:
+		payload.update(dict(extra_metadata))
 	return payload
 
 
@@ -514,6 +451,7 @@ def publish_batch(
 	force: bool = False,
 	dry_run: bool = False,
 	validate: bool = True,
+	extra_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
 	source_result_root = source_result_root.expanduser().resolve()
 	if not source_result_root.exists():
@@ -545,6 +483,7 @@ def publish_batch(
 		status=status,
 		result_mode="mounted",
 		uid_count=summary["manifest_uid_count"] or summary["uid_dir_count"],
+		extra_metadata=extra_metadata,
 	)
 	if stage_root.exists():
 		shutil.rmtree(stage_root)

@@ -1,18 +1,11 @@
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 
-
-THIS_DIR = Path(__file__).resolve().parent
-SCRIPTS_DIR = THIS_DIR.parents[1] / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-	sys.path.insert(0, str(SCRIPTS_DIR))
-
-from server_batch_lib import (
+from ..server_batch_lib import (
 	init_179_server_layout,
 	intake_upload_bundle,
 	publish_batch,
@@ -95,6 +88,11 @@ class ServerBatchToolsTest(unittest.TestCase):
 			shard_index=1,
 			shard_count=10,
 			days=["2023-03-01", "2023-03-02"],
+			extra_metadata={
+				"visibility_scope": "public",
+				"annotation_mode": "annotatable",
+				"owner_actor_id": "alice-demo",
+			},
 		)
 		target_root = published_root / "cohort2_b01of10"
 		self.assertTrue(target_root.exists())
@@ -103,6 +101,8 @@ class ServerBatchToolsTest(unittest.TestCase):
 		self.assertTrue((target_root / "review" / "reviewers").exists())
 		self.assertTrue((target_root / "accepted_assets" / "reviewers").exists())
 		self.assertEqual(payload["metadata"]["cohort_id"], "cohort2")
+		self.assertEqual(payload["metadata"]["visibility_scope"], "public")
+		self.assertEqual(payload["metadata"]["owner_actor_id"], "alice-demo")
 
 	def test_validate_result_root_detects_missing_manifest(self) -> None:
 		result_root = self.root / "bad_result"

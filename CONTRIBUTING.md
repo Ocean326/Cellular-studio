@@ -19,9 +19,11 @@
 
 - 真实数据
 - `data/` 下的运行产物
+- `.runtime/` 下的本机 pid / log / 启停脚本
 - 本地路径
 - 服务器私有路径
-- 缓存、日志、备份
+- 缓存、日志
+- `_backup_*` 目录里的历史归档快照
 
 ## 3. 当你的数据格式不同
 
@@ -55,6 +57,21 @@
 - 没有私有路径进入 Git
 - 改合同时已更新 `docs/`
 - 你的改动属于核心逻辑还是适配层，边界清楚
+
+最小验证基线：
+
+```bash
+cd /Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio
+python3 -m unittest web.test_review_lib web.test_review_server scripts.tests.test_server_batch_tools scripts.tests.test_research_arena_v15_layer_adapter scripts.tests.test_adapter_template
+python3 scripts/check_index_html_inline_js.py
+```
+
+如果改了包入口或启动链，再补一条：
+
+```bash
+cd /Users/ocean/Documents/Playground/Cellular-projects
+python3 -m trajectory_annotation_studio.web.review_server --help
+```
 
 ## 6. 进一步阅读
 
