@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from ..server_batch_lib import validate_result_root
+from .. import user_upload_adapter_lib
 from ..user_upload_adapter_lib import (
 	UserUploadAdapterError,
 	build_signal6_result,
 	build_trajectory4_result,
+	detect_user_upload_type,
 )
 
 
@@ -98,6 +102,30 @@ class UserUploadAdapterLibTest(unittest.TestCase):
 		with self.assertRaisesRegex(UserUploadAdapterError, "missing required column for timestamp"):
 			build_trajectory4_result(source_csv, self.root / "bad_result")
 
+	def test_detect_user_upload_type_identifies_trajectory4(self) -> None:
+		source_csv = self.root / "trajectory4_detect.csv"
+		self._write_csv(
+			source_csv,
+			["UID", "Latitude", "Longitude", "TimestampMS", "State"],
+			[
+				{"UID": "u2001", "Latitude": 39.901, "Longitude": 116.391, "TimestampMS": "1713340800000", "State": "stay"},
+			],
+		)
+
+		self.assertEqual(detect_user_upload_type(source_csv), "trajectory4")
+
+	def test_detect_user_upload_type_identifies_signal6_even_if_requested_type_is_trajectory4(self) -> None:
+		source_csv = self.root / "signal6_detect.csv"
+		self._write_csv(
+			source_csv,
+			["UID", "CID", "Lat", "Lon", "TIn", "TOut", "Status"],
+			[
+				{"UID": "s2101", "CID": "1101", "Lat": 39.9042, "Lon": 116.4074, "TIn": "1713340800000", "TOut": "1713340980000", "Status": "road"},
+			],
+		)
+
+		self.assertEqual(detect_user_upload_type(source_csv, requested_upload_type="trajectory4"), "signal6")
+
 	def test_build_signal6_result_writes_valid_result_root(self) -> None:
 		source_csv = self.root / "signal6.csv"
 		self._write_csv(
@@ -126,7 +154,7 @@ class UserUploadAdapterLibTest(unittest.TestCase):
 		)
 
 		result_root = self.root / "result_signal6"
-		payload = build_signal6_result(source_csv, result_root, title="Signal6 Upload")
+		payload = build_signal6_result(source_csv, result_root, title="Signal6 Upload", pipeline_mode="legacy")
 
 		self.assertEqual(payload["adapter"], "signal6")
 		self.assertEqual(payload["uid_count"], 1)
@@ -165,7 +193,7 @@ class UserUploadAdapterLibTest(unittest.TestCase):
 		)
 
 		result_root = self.root / "result_signal6_casefold"
-		payload = build_signal6_result(source_csv, result_root, title="Signal6 Casefold Upload")
+		payload = build_signal6_result(source_csv, result_root, title="Signal6 Casefold Upload", pipeline_mode="legacy")
 		rows = list(csv.DictReader((result_root / "s2101" / "signal.csv").read_text(encoding="utf-8").splitlines()))
 
 		self.assertEqual(payload["uid_count"], 1)
@@ -192,7 +220,7 @@ class UserUploadAdapterLibTest(unittest.TestCase):
 		)
 
 		result_root = self.root / "result_signal6_time_aliases"
-		payload = build_signal6_result(source_csv, result_root, title="Signal6 Time Alias Upload")
+		payload = build_signal6_result(source_csv, result_root, title="Signal6 Time Alias Upload", pipeline_mode="legacy")
 		rows = list(csv.DictReader((result_root / "s2201" / "signal.csv").read_text(encoding="utf-8").splitlines()))
 
 		self.assertEqual(payload["uid_count"], 1)
@@ -245,7 +273,7 @@ class UserUploadAdapterLibTest(unittest.TestCase):
 		)
 
 		with self.assertRaisesRegex(UserUploadAdapterError, "outside Beijing bbox"):
-			build_signal6_result(source_csv, self.root / "bad_signal_result")
+			build_signal6_result(source_csv, self.root / "bad_signal_result", pipeline_mode="legacy")
 
 	def test_build_signal6_result_rejects_reverse_time_window(self) -> None:
 		source_csv = self.root / "signal6_bad_time.csv"
@@ -258,7 +286,60 @@ class UserUploadAdapterLibTest(unittest.TestCase):
 		)
 
 		with self.assertRaisesRegex(UserUploadAdapterError, "t_out must be >= t_in"):
-			build_signal6_result(source_csv, self.root / "bad_signal_time_result")
+			build_signal6_result(source_csv, self.root / "bad_signal_time_result", pipeline_mode="legacy")
+
+	def test_build_signal6_result_dispatches_to_v311_pipeline(self) -> None:
+		source_csv = self.root / "signal6_v311_dispatch.csv"
+		self._write_csv(
+			source_csv,
+			["uid", "cid", "latitude", "longitude", "t_in", "t_out"],
+			[
+				{"uid": "s9001", "cid": "1101", "latitude": 39.9042, "longitude": 116.4074, "t_in": 1, "t_out": 2},
+			],
+		)
+		result_root = self.root / "result_signal6_v311_dispatch"
+		with mock.patch.object(
+			user_upload_adapter_lib,
+			"_build_signal6_result_v311",
+			return_value={"adapter": "signal6", "pipeline_mode": "v311", "uids": ["s9001"]},
+		) as mock_v311:
+			pipeline_options = {"fmm_variant_params": {"road": {"r": 0.01}}}
+			payload = build_signal6_result(
+				source_csv,
+				result_root,
+				pipeline_mode="v311",
+				pipeline_options=pipeline_options,
+			)
+		self.assertEqual(payload["pipeline_mode"], "v311")
+		mock_v311.assert_called_once_with(
+			source_csv_path=source_csv,
+			output_root=result_root,
+			title="Uploaded Signal6",
+			field_mapping=None,
+			pipeline_options=pipeline_options,
+		)
+
+	@unittest.skipUnless(
+		os.environ.get("RUN_SIGNAL6_V311_SMOKE") == "1",
+		"Set RUN_SIGNAL6_V311_SMOKE=1 to run real signal6 v311 smoke test.",
+	)
+	def test_build_signal6_result_v311_smoke(self) -> None:
+		source_csv = self.root / "signal6_v311_smoke.csv"
+		self._write_csv(
+			source_csv,
+			["uid", "cid", "latitude", "longitude", "t_in", "t_out"],
+			[
+				{"uid": "91001", "cid": "1101", "latitude": 39.9042, "longitude": 116.4074, "t_in": 1713340800000, "t_out": 1713340980000},
+				{"uid": "91001", "cid": "1102", "latitude": 39.9052, "longitude": 116.4084, "t_in": 1713340980000, "t_out": 1713341160000},
+				{"uid": "91002", "cid": "1201", "latitude": 39.9142, "longitude": 116.4174, "t_in": 1713340800000, "t_out": 1713341100000},
+			],
+		)
+		result_root = self.root / "result_signal6_v311_smoke"
+		payload = build_signal6_result(source_csv, result_root, title="Signal6 V311 Smoke", pipeline_mode="v311")
+		self.assertEqual(payload["pipeline_mode"], "v311")
+		self.assertEqual(payload["ui_mode"], "chain2")
+		self.assertTrue((result_root / "91001" / "line.csv").exists())
+		self.assertTrue((result_root / "manifest.json").exists())
 
 
 if __name__ == "__main__":

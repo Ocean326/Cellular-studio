@@ -4,9 +4,11 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>信令轨迹演示与调试预览</title>
-	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+	<link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
+	<script src="./vendor/leaflet/leaflet.js"></script>
+	<script src="./vendor/papaparse/papaparse.min.js"></script>
+	<script src="./runtime/deployment_runtime_config.js"></script>
+	<script src="./app/runtime/runtime_config.js"></script>
 	<script src="./app/studio_bootstrap.js"></script>
 	<script src="./app/features/studio_admin/studio_management_core.js"></script>
 	<link rel="stylesheet" href="./styles/index.css" />
@@ -73,9 +75,34 @@
 			</div>
 				</div>
 			</aside>
-			<button id="studio-management-entry" type="button" title="打开 Studio 管理" aria-label="打开 Studio 管理">
+			<button
+				id="studio-management-entry"
+				type="button"
+				title="打开 Studio 管理"
+				aria-label="打开 Studio 管理"
+				aria-controls="studio-management-overlay"
+				aria-haspopup="dialog"
+				aria-expanded="false"
+				aria-pressed="false"
+				data-studio-workspace-trigger="upload"
+			>
 				<span class="floating-action-icon" aria-hidden="true">
 					<svg viewBox="0 0 24 24"><path d="M12 16V4"></path><path d="M7.5 8.5L12 4l4.5 4.5"></path><path d="M4 15.5V19a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-3.5"></path></svg>
+				</span>
+			</button>
+			<button
+				id="studio-export-entry"
+				type="button"
+				title="打开导出下载"
+				aria-label="打开导出下载"
+				aria-controls="studio-management-overlay"
+				aria-haspopup="dialog"
+				aria-expanded="false"
+				aria-pressed="false"
+				data-studio-workspace-trigger="export"
+			>
+				<span class="floating-action-icon" aria-hidden="true">
+					<svg viewBox="0 0 24 24"><path d="M12 4V16"></path><path d="M7.5 11.5L12 16l4.5-4.5"></path><path d="M4 19.5V19a1.5 1.5 0 0 1 1.5-1.5h13A1.5 1.5 0 0 1 20 19v.5"></path></svg>
 				</span>
 			</button>
 			<div id="sidebar-resize" title="拖拽调整宽度"></div>
@@ -94,6 +121,10 @@
 						</div>
 						<div class="review-meta" id="review-meta">当前 decision：未设置</div>
 					</div>
+					<div id="review-mode-switch" class="review-mode-switch" aria-label="顶栏模式切换">
+						<button id="review-mode-annotation-btn" class="review-mode-btn active" type="button" aria-pressed="true">批注</button>
+						<button id="track-edit-toggle" class="review-mode-btn" type="button" aria-pressed="false">编辑</button>
+					</div>
 					<div class="review-panel-actions">
 						<div class="review-identity-row">
 							<div class="review-identity-text">
@@ -110,25 +141,50 @@
 					</div>
 				</div>
 				<div id="review-panel-body">
-					<div class="review-decisions">
-						<button type="button" class="review-decision-btn" data-decision="accept">保留</button>
-						<button type="button" class="review-decision-btn" data-decision="reject">排除</button>
-						<button type="button" class="review-decision-btn" data-decision="skip">跳过</button>
+					<div id="review-annotation-mode-panel">
+						<div class="review-decisions">
+							<button type="button" class="review-decision-btn" data-decision="accept">保留</button>
+							<button type="button" class="review-decision-btn" data-decision="reject">排除</button>
+							<button type="button" class="review-decision-btn" data-decision="skip">跳过</button>
+						</div>
+						<div class="review-tag-wrap">
+							<label class="review-inline-label" for="review-tag-select">Tag</label>
+							<select id="review-tag-select" class="review-tag-select" aria-label="整轨标签">
+								<option value="">无标签</option>
+							</select>
+						</div>
+						<input id="review-notes" class="review-note-input" type="text" placeholder="备注，可留空" />
+						<input id="reference-source-input" class="review-input review-input-hidden" type="text" placeholder="reference_source，例如 line.csv / fmm.csv" />
+						<div class="review-actions">
+							<button id="save-review-btn" type="button">保存</button>
+							<button id="refresh-review-btn" type="button">刷新</button>
+						</div>
 					</div>
-					<div class="review-tag-wrap">
-						<label class="review-inline-label" for="review-tag-select">Tag</label>
-						<select id="review-tag-select" class="review-tag-select" aria-label="整轨标签">
-							<option value="">无标签</option>
-						</select>
-					</div>
-					<input id="review-notes" class="review-note-input" type="text" placeholder="备注，可留空" />
-					<input id="reference-source-input" class="review-input review-input-hidden" type="text" placeholder="reference_source，例如 line.csv / fmm.csv" />
-					<div class="review-actions">
-						<button id="save-review-btn" type="button">保存</button>
-						<button id="refresh-review-btn" type="button">刷新</button>
+					<div id="track-edit-panel" aria-live="polite" hidden>
+						<div class="track-edit-toolbar">
+							<div class="track-edit-primary-actions">
+								<button id="track-edit-undo-btn" class="track-edit-action-btn" type="button">撤销</button>
+								<button id="track-edit-redo-btn" class="track-edit-action-btn" type="button">重做</button>
+								<div class="track-edit-save-split">
+									<button id="track-edit-save-btn" class="track-edit-save-btn" type="button">保存</button>
+									<button id="track-edit-save-options-btn" class="track-edit-save-options-btn" type="button" aria-haspopup="menu" aria-expanded="false">▾</button>
+								</div>
+								<button id="track-edit-clear-selection" class="track-edit-clear-btn" type="button">清空选择</button>
+							</div>
+							<label class="track-edit-coordinate-toggle" for="track-edit-show-coordinates">
+								<input id="track-edit-show-coordinates" type="checkbox" />
+								<span>显示经纬度</span>
+							</label>
+						</div>
+						<div class="track-edit-summary-row">
+							<div id="track-edit-status" class="track-edit-status">编辑关闭</div>
+							<div id="track-edit-selection" class="track-edit-selection">未选中任何点</div>
+						</div>
+						<div id="track-edit-coordinate-summary" class="track-edit-coordinate-summary" hidden></div>
+						<div class="track-edit-hint">默认拖点；按住空格临时切换地图平移/缩放；Ctrl 多选，Shift 连选，右键批量改标签。</div>
 					</div>
 				</div>
-				<div id="review-aggregate-panel" class="collapsed" aria-hidden="true">
+				<div id="review-aggregate-panel" class="collapsed" aria-hidden="false">
 					<button id="review-aggregate-toggle" class="review-aggregate-header" type="button">
 						<span>多人标注汇总</span>
 						<span id="review-aggregate-toggle-text" class="review-aggregate-toggle-text">展开</span>
@@ -162,6 +218,13 @@
 				<div id="time-scrubber-body">
 					<div id="time-scrubber-canvas-wrap">
 						<canvas id="time-scrubber-canvas" height="72"></canvas>
+						<div id="time-scrubber-segment-row">
+							<div id="time-scrubber-segment-label">分段层</div>
+							<div id="time-scrubber-segment-canvas-wrap">
+								<canvas id="time-scrubber-segment-canvas" height="42" aria-label="当前时间窗口内的分段标注"></canvas>
+							</div>
+						</div>
+						<div id="time-scrubber-segment-detail" aria-live="polite"></div>
 						<div id="time-scrubber-overview-row">
 							<button id="time-scrubber-left" class="time-scrubber-shift-btn" type="button" title="向左平移时间轴窗口">‹</button>
 							<div id="time-scrubber-overview-label">全时间</div>
@@ -252,10 +315,26 @@
 					<span id="theme-mode-label" class="floating-action-label">夜景</span>
 				</button>
 			</div>
-			<div id="time-scrubber-context-menu" aria-hidden="true">
-				<button id="time-scrubber-pin-action" class="time-scrubber-menu-item" type="button">打标记</button>
-			</div>
-			<div id="annotation-settings-overlay" aria-hidden="true">
+				<div id="time-scrubber-context-menu" aria-hidden="true">
+					<button id="time-scrubber-pin-action" class="time-scrubber-menu-item" type="button">打标记</button>
+				</div>
+				<div id="track-edit-context-menu" aria-hidden="true">
+					<div id="track-edit-context-title" class="track-edit-context-title">批量修改轨迹点</div>
+					<div id="track-edit-context-subtitle" class="track-edit-context-subtitle">当前未选中点</div>
+					<label class="track-edit-context-field" for="track-edit-context-value">
+						<span id="track-edit-context-field-label">标签字段</span>
+						<select id="track-edit-context-value"></select>
+					</label>
+					<div class="track-edit-context-actions">
+						<button id="track-edit-context-apply" class="track-edit-context-apply" type="button">应用到当前选择</button>
+						<button id="track-edit-context-close" class="track-edit-context-close" type="button">关闭</button>
+					</div>
+				</div>
+				<div id="track-edit-save-menu" aria-hidden="true">
+					<button id="track-edit-save-overwrite" class="track-edit-save-menu-item" type="button">覆盖当前</button>
+					<button id="track-edit-save-download" class="track-edit-save-menu-item" type="button">另存为 JSON</button>
+				</div>
+				<div id="annotation-settings-overlay" aria-hidden="true">
 				<div id="annotation-settings-panel" role="dialog" aria-modal="true" aria-labelledby="annotation-settings-title">
 					<div id="annotation-settings-header">
 						<div class="annotation-settings-title-wrap">
@@ -281,6 +360,19 @@
 							<h4>标记快捷键</h4>
 							<p>在非输入状态下直接触发保留 / 排除 / 跳过 / 保存；点击按键框后按下新键即可覆盖，<code>Backspace / Delete</code> 可清空。</p>
 							<div id="annotation-shortcut-list"></div>
+						</section>
+						<section class="annotation-settings-section">
+							<h4>标记规则</h4>
+							<p>这里保留前端基础约束开关，供时间轴标记逻辑读取。</p>
+							<label class="annotation-toggle-card" for="annotation-exclusive-mode">
+								<span class="annotation-toggle-copy">
+									<span class="annotation-toggle-title">互斥标记</span>
+									<span id="annotation-exclusive-mode-copy" class="annotation-toggle-desc">同一时间只允许一个标签，严格逻辑按 (tstart, tend]，共享边界归上一段。</span>
+								</span>
+								<span class="annotation-toggle-control">
+									<input id="annotation-exclusive-mode" type="checkbox" aria-describedby="annotation-exclusive-mode-copy" />
+								</span>
+							</label>
 						</section>
 						<section class="annotation-settings-section">
 							<h4>时间轴透明度</h4>
@@ -313,7 +405,7 @@
 					</div>
 				</div>
 			</div>
-			<div id="studio-management-overlay" aria-hidden="true">
+			<div id="studio-management-overlay" aria-hidden="true" data-active-workspace="upload">
 				<div id="studio-management-panel" role="dialog" aria-modal="true" aria-labelledby="studio-management-title">
 					<div id="studio-management-header">
 						<div class="studio-management-title-block">
@@ -341,9 +433,17 @@
 							<button id="studio-management-close" class="studio-management-close" type="button" aria-label="关闭 Studio 管理">×</button>
 						</div>
 					</div>
-					<div id="studio-management-body">
-						<div class="studio-management-sidebar">
-							<section class="studio-management-section studio-management-compose">
+					<div id="studio-management-body" data-active-workspace="upload">
+						<div id="studio-management-sidebar" class="studio-management-sidebar">
+							<section
+								id="studio-upload-section"
+								class="studio-management-section studio-management-compose"
+								data-studio-workspace-anchor="upload"
+								data-workspace-active="true"
+								tabindex="-1"
+								aria-hidden="false"
+								aria-label="上传工作区"
+							>
 								<div class="studio-management-section-head">
 									<div class="studio-management-section-copy">
 										<div class="studio-management-section-kicker">Create / Upload</div>
@@ -351,74 +451,153 @@
 										<p>左侧创建上传，右侧追踪记录并直接打开已生成批次。</p>
 									</div>
 								</div>
-								<div class="studio-management-field-grid">
-									<div class="studio-management-field">
-										<label class="studio-management-label" for="studio-management-upload-type">上传类型</label>
-										<select id="studio-management-upload-type" class="studio-management-select">
-											<option value="trajectory4">trajectory4</option>
-											<option value="signal6">signal6</option>
-										</select>
+								<div class="studio-management-workspace-body">
+									<div class="studio-management-field-grid studio-management-upload-grid">
+										<div class="studio-management-field">
+											<label class="studio-management-label" for="studio-management-upload-type">上传类型</label>
+											<select id="studio-management-upload-type" class="studio-management-select">
+												<option value="auto">自动识别</option>
+												<option value="trajectory4">trajectory4</option>
+												<option value="signal6">signal6</option>
+											</select>
+										</div>
+										<div class="studio-management-field">
+											<label class="studio-management-label" for="studio-management-visibility-scope">可见性</label>
+											<select id="studio-management-visibility-scope" class="studio-management-select">
+												<option value="private">仅自己</option>
+												<option value="public">公开</option>
+											</select>
+										</div>
+										<div class="studio-management-field">
+											<label class="studio-management-label" for="studio-management-annotation-mode">标注模式</label>
+											<select id="studio-management-annotation-mode" class="studio-management-select">
+												<option value="annotatable">可标注</option>
+												<option value="view_only">仅查看</option>
+											</select>
+										</div>
+										<div class="studio-management-field">
+											<label class="studio-management-label" for="studio-management-display-name">展示名</label>
+											<input id="studio-management-display-name" class="studio-management-input" type="text" placeholder="可选，默认使用文件名" />
+										</div>
 									</div>
-									<div class="studio-management-field">
-										<label class="studio-management-label" for="studio-management-visibility-scope">可见性</label>
-										<select id="studio-management-visibility-scope" class="studio-management-select">
-											<option value="private">仅自己</option>
-											<option value="public">公开</option>
-										</select>
-									</div>
-									<div class="studio-management-field">
-										<label class="studio-management-label" for="studio-management-annotation-mode">标注模式</label>
-										<select id="studio-management-annotation-mode" class="studio-management-select">
-											<option value="annotatable">可标注</option>
-											<option value="view_only">仅查看</option>
-										</select>
-									</div>
-									<div class="studio-management-field">
-										<label class="studio-management-label" for="studio-management-display-name">展示名</label>
-										<input id="studio-management-display-name" class="studio-management-input" type="text" placeholder="可选，默认使用文件名" />
-									</div>
-								</div>
-								<div class="studio-management-file-stage">
-									<div class="studio-management-field full">
-										<div class="studio-management-file-head">
-											<label class="studio-management-label" for="studio-management-upload-file">原始文件</label>
-											<div class="studio-management-file-head-actions">
-												<button id="studio-management-custom-fields-toggle" class="studio-management-secondary-toggle" type="button" aria-expanded="false" aria-controls="studio-management-custom-fields">自定义字段</button>
-												<div id="studio-management-help-anchor" class="studio-management-help-anchor">
-													<button id="studio-management-help-trigger" class="studio-management-help-trigger" type="button" aria-expanded="false" aria-controls="studio-management-help-popover">
-														<span id="studio-management-help-trigger-text">说明</span>
-														<span class="studio-management-help-icon" aria-hidden="true">i</span>
-													</button>
-													<div id="studio-management-help-popover" class="studio-management-help-popover collapsed" role="note"></div>
+									<div class="studio-management-file-stage">
+										<div class="studio-management-field full">
+											<div class="studio-management-file-head">
+												<label class="studio-management-label" for="studio-management-upload-file">原始文件</label>
+												<div class="studio-management-file-head-actions">
+													<button id="studio-management-custom-fields-toggle" class="studio-management-secondary-toggle" type="button" aria-expanded="false" aria-controls="studio-management-custom-fields">自定义字段</button>
+													<div id="studio-management-help-anchor" class="studio-management-help-anchor">
+														<button id="studio-management-help-trigger" class="studio-management-help-trigger" type="button" aria-expanded="false" aria-controls="studio-management-help-popover">
+															<span id="studio-management-help-trigger-text">说明</span>
+															<span class="studio-management-help-icon" aria-hidden="true">i</span>
+														</button>
+														<div id="studio-management-help-popover" class="studio-management-help-popover collapsed" role="note" aria-hidden="true"></div>
+													</div>
 												</div>
 											</div>
+											<input id="studio-management-upload-file" class="studio-management-file" type="file" accept=".csv,text/csv" multiple />
+											<div class="studio-management-hint">支持一次选择多个 CSV。默认兼容大小写、snake_case、camelCase 和常见时间字段别名；只有你的文件列名比较特殊时，才需要展开自定义字段。</div>
+											<div id="studio-management-custom-fields" class="studio-management-custom-fields collapsed" aria-hidden="true"></div>
 										</div>
-										<input id="studio-management-upload-file" class="studio-management-file" type="file" accept=".csv,text/csv" />
-										<div class="studio-management-hint">默认兼容大小写、snake_case、camelCase 和常见时间字段别名；只有你的文件列名比较特殊时，才需要展开自定义字段。</div>
-										<div id="studio-management-custom-fields" class="studio-management-custom-fields collapsed"></div>
 									</div>
 								</div>
-								<div class="studio-management-actions">
-									<button id="studio-management-upload-btn" class="studio-management-btn" type="button">仅上传</button>
-									<button id="studio-management-upload-process-btn" class="studio-management-btn primary" type="button">上传并处理</button>
-									<button id="studio-management-reset-btn" class="studio-management-btn" type="button">重置表单</button>
-								</div>
-								<div class="studio-management-feedback-stack">
-									<div id="studio-management-progress" aria-live="polite" data-busy="false" data-tone="info">
-										<div class="studio-management-progress-head">
-											<div id="studio-management-progress-title" class="studio-management-progress-title">等待上传</div>
-											<div id="studio-management-progress-percent" class="studio-management-progress-percent">0%</div>
-										</div>
-										<div class="studio-management-progress-track">
-											<div id="studio-management-progress-bar" class="studio-management-progress-bar"></div>
-										</div>
-										<div id="studio-management-progress-detail" class="studio-management-progress-detail">选择文件后可以看到上传与处理进度。</div>
+								<div class="studio-management-workspace-footer">
+									<div class="studio-management-actions studio-management-upload-actions">
+										<button id="studio-management-upload-btn" class="studio-management-btn" type="button">仅上传</button>
+										<button id="studio-management-upload-process-btn" class="studio-management-btn primary" type="button">上传并处理</button>
+										<button id="studio-management-reset-btn" class="studio-management-btn" type="button">重置表单</button>
 									</div>
-									<div id="studio-management-flash" class="info" aria-live="polite"></div>
+									<div class="studio-management-feedback-stack">
+										<div id="studio-management-progress" role="status" aria-live="polite" aria-atomic="true" aria-busy="false" data-busy="false" data-tone="info">
+											<div class="studio-management-progress-head">
+												<div id="studio-management-progress-title" class="studio-management-progress-title">等待上传</div>
+												<div id="studio-management-progress-percent" class="studio-management-progress-percent">0%</div>
+											</div>
+											<div class="studio-management-progress-track">
+												<div id="studio-management-progress-bar" class="studio-management-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+											</div>
+											<div id="studio-management-progress-detail" class="studio-management-progress-detail">选择文件后可以看到上传与处理进度。</div>
+										</div>
+										<div id="studio-management-flash" class="info" aria-live="polite"></div>
+									</div>
+								</div>
+							</section>
+							<section
+								id="studio-export-section"
+								class="studio-management-section studio-management-export-section"
+								data-studio-workspace-anchor="export"
+								data-workspace-active="false"
+								tabindex="-1"
+								hidden
+								aria-hidden="true"
+								aria-label="导出工作区"
+							>
+								<div class="studio-management-section-head">
+									<div class="studio-management-section-copy">
+										<div class="studio-management-section-kicker">Export Bundle</div>
+										<h4>导出下载</h4>
+										<p>按当前标注结果筛选样本，导出 zip 压缩包并直接下载。</p>
+									</div>
+								</div>
+								<div class="studio-management-workspace-body">
+									<div class="studio-management-field-grid studio-management-export-grid">
+										<div class="studio-management-field">
+											<label class="studio-management-label" for="studio-export-batch-select">批次</label>
+											<select id="studio-export-batch-select" class="studio-management-select"></select>
+										</div>
+										<div class="studio-management-field">
+											<label class="studio-management-label" for="studio-export-uid-select">UID</label>
+											<select id="studio-export-uid-select" class="studio-management-select">
+												<option value="">全部已标注 UID</option>
+											</select>
+										</div>
+										<div class="studio-management-field">
+											<label class="studio-management-label" for="studio-export-tag-select">Tag</label>
+											<select id="studio-export-tag-select" class="studio-management-select">
+												<option value="">全部 Tag</option>
+											</select>
+										</div>
+									</div>
+									<div class="studio-management-field full studio-management-export-decision-field">
+										<div class="studio-management-label">筛选状态</div>
+										<div id="studio-export-decision-group" class="studio-export-decision-group">
+											<label class="studio-export-decision-pill"><input id="studio-export-decision-accept" type="checkbox" checked />通过</label>
+											<label class="studio-export-decision-pill"><input id="studio-export-decision-reject" type="checkbox" checked />未通过</label>
+											<label class="studio-export-decision-pill"><input id="studio-export-decision-skip" type="checkbox" checked />跳过</label>
+										</div>
+									</div>
+									<div class="studio-management-field-grid studio-management-export-settings-grid">
+										<div class="studio-management-field">
+											<label class="studio-management-label" for="studio-export-interval-seconds">最小 GPS 间隔</label>
+											<input id="studio-export-interval-seconds" class="studio-management-input" type="number" min="5" step="1" value="5" />
+											<div class="studio-management-hint">单位秒，最小 5s。导出时优先按 FMM 时间锚点补点；驻留段优先使用 snap/raw，line 仅作为兜底。</div>
+										</div>
+										<div class="studio-management-field">
+											<div class="studio-management-label" id="studio-export-timestamp-unit-label">导出时间戳单位</div>
+											<div id="studio-export-timestamp-unit-group" class="studio-export-timestamp-unit-group" role="group" aria-labelledby="studio-export-timestamp-unit-label">
+												<button type="button" class="studio-export-unit-btn active" data-studio-export-timestamp-unit="ms" aria-pressed="true">毫秒</button>
+												<button type="button" class="studio-export-unit-btn" data-studio-export-timestamp-unit="s" aria-pressed="false">秒</button>
+											</div>
+											<div class="studio-management-hint">作用于 GPS 的 timestamp 与信令的 t_in / t_out。</div>
+										</div>
+										<div class="studio-management-field full">
+											<label class="studio-export-decision-pill studio-export-span-only-pill">
+												<input id="studio-export-labeled-span-only" type="checkbox" />
+												仅导出段落标注时间范围（首段起点至末段终点）
+											</label>
+										</div>
+									</div>
+								</div>
+								<div class="studio-management-workspace-footer">
+									<div class="studio-management-actions studio-management-export-actions">
+										<button id="studio-export-download-btn" class="studio-management-btn primary" type="button">导出压缩包</button>
+										<button id="studio-export-dataset-btn" class="studio-management-btn" type="button">最小 GPS 导出</button>
+									</div>
+									<div id="studio-export-summary" class="studio-management-hint" aria-live="polite">默认使用当前 batch，可切换批次后再按 UID、Tag 和状态筛选。</div>
 								</div>
 							</section>
 						</div>
-						<div class="studio-management-main">
+						<div id="studio-management-main" class="studio-management-main">
 							<section class="studio-management-section studio-management-uploads-section">
 								<div id="studio-management-uploads-head">
 									<div class="studio-management-section-copy">
@@ -447,6 +626,11 @@
 				</button>
 				<div id="map-tools-panel">
 					<div id="layers-panel">
+						<section id="basemap-panel" class="map-tools-section">
+							<h4>底图</h4>
+							<div id="basemap-mode-controls" aria-label="底图模式"></div>
+							<div class="status" id="basemap-mode-status">当前底图：未加载</div>
+						</section>
 						<h4>图层（拖拽调整顺序）</h4>
 						<div id="layer-controls"></div>
 						<div id="status-style-panel">

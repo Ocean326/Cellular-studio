@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 from uuid import uuid4
 
 try:
@@ -18,6 +18,7 @@ try:
 		ReviewPaths,
 		ensure_reviewer_profile,
 		export_accepted_assets,
+		export_segment_label_dataset,
 		export_reviewer_bundle,
 		export_review_aggregate,
 		get_review,
@@ -25,8 +26,10 @@ try:
 		get_uid_review_aggregate,
 		list_reviewers,
 		read_latest_reviews,
+		read_track_edits,
 		read_timeline_annotations,
 		resolve_review_paths,
+		write_track_edits,
 		write_timeline_annotations,
 		write_review,
 	)
@@ -51,11 +54,13 @@ try:
 		write_json_metadata,
 		write_upload_metadata,
 	)
+	from .offline_tile_lib import OfflineTileService
 except ImportError:
 	from review_lib import (  # type: ignore
 		ReviewPaths,
 		ensure_reviewer_profile,
 		export_accepted_assets,
+		export_segment_label_dataset,
 		export_reviewer_bundle,
 		export_review_aggregate,
 		get_review,
@@ -63,8 +68,10 @@ except ImportError:
 		get_uid_review_aggregate,
 		list_reviewers,
 		read_latest_reviews,
+		read_track_edits,
 		read_timeline_annotations,
 		resolve_review_paths,
+		write_track_edits,
 		write_timeline_annotations,
 		write_review,
 	)
@@ -89,6 +96,10 @@ except ImportError:
 		write_json_metadata,
 		write_upload_metadata,
 	)
+	try:
+		from offline_tile_lib import OfflineTileService  # type: ignore
+	except ImportError:  # pragma: no cover
+		OfflineTileService = None  # type: ignore
 
 try:
 	from ..scripts.server_batch_lib import publish_batch
@@ -96,6 +107,8 @@ try:
 		UserUploadAdapterError,
 		build_signal6_result,
 		build_trajectory4_result,
+		detect_user_upload_type,
+		normalize_signal6_pipeline_mode,
 		normalize_user_upload_field_mapping,
 	)
 except ImportError:
@@ -104,6 +117,8 @@ except ImportError:
 		UserUploadAdapterError,
 		build_signal6_result,
 		build_trajectory4_result,
+		detect_user_upload_type,
+		normalize_signal6_pipeline_mode,
 		normalize_user_upload_field_mapping,
 	)
 
@@ -114,7 +129,7 @@ UPLOAD_STATUS_NAME = "upload_status.json"
 UPLOAD_FILE_NAME = "payload.zip"
 SAFE_UPLOAD_RE = re.compile(r"[^A-Za-z0-9._-]+")
 SAFE_SOURCE_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
-USER_UPLOAD_TYPES = frozenset({"trajectory4", "signal6"})
+USER_UPLOAD_TYPES = frozenset({"trajectory4", "signal6", "auto"})
 ANNOTATION_MODES = frozenset({"annotatable", "view_only"})
 DEFAULT_LOCAL_ACTOR_ID = "local-dev"
 DEFAULT_LOCAL_ACTOR_NAME = "Local Dev"
@@ -390,10 +405,12 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 		batch_order: list[str] | None = None,
 		default_batch: str | None = None,
 		incoming_root: Path | None = None,
-		runtime_root: Path | None = None,
-		upload_max_bytes: int = DEFAULT_UPLOAD_MAX_BYTES,
-		**kwargs,
-	):
+			runtime_root: Path | None = None,
+			offline_tile_cache_root: Path | None = None,
+			upload_max_bytes: int = DEFAULT_UPLOAD_MAX_BYTES,
+			signal6_pipeline_mode: str = "v311",
+			**kwargs,
+		):
 		self.review_paths = review_paths
 		self.batches_root = Path(batches_root).resolve() if batches_root else None
 		self.runtime_root = (
@@ -415,7 +432,14 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 			if incoming_root is not None
 			else (self.runtime_root / "incoming").resolve()
 		)
+		self.offline_tile_cache_root = (
+			Path(offline_tile_cache_root).resolve()
+			if offline_tile_cache_root is not None
+			else (self.runtime_root / "offline_tiles_cache").resolve()
+		)
+		self._offline_tile_service = None
 		self.upload_max_bytes = max(int(upload_max_bytes or DEFAULT_UPLOAD_MAX_BYTES), 1)
+		self.signal6_pipeline_mode = normalize_signal6_pipeline_mode(signal6_pipeline_mode)
 		super().__init__(*args, directory=directory, **kwargs)
 
 	def end_headers(self) -> None:
@@ -435,6 +459,42 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 
 	def _send_error_json(self, message: str, status: int = HTTPStatus.BAD_REQUEST) -> None:
 		self._send_json({"error": message}, status=status)
+
+	def _send_png(self, payload: bytes, status: int = HTTPStatus.OK) -> None:
+		self.send_response(status)
+		self.send_header("Content-Type", "image/png")
+		self.send_header("Content-Length", str(len(payload)))
+		self.end_headers()
+		self.wfile.write(payload)
+
+	def _send_file(
+		self,
+		path: Path,
+		*,
+		content_type: str = "application/octet-stream",
+		download_name: str | None = None,
+		status: int = HTTPStatus.OK,
+	) -> None:
+		payload = path.read_bytes()
+		self.send_response(status)
+		self.send_header("Content-Type", content_type)
+		self.send_header("Content-Length", str(len(payload)))
+		if download_name:
+			self.send_header("Content-Disposition", f'attachment; filename="{download_name}"')
+		self.end_headers()
+		self.wfile.write(payload)
+
+	def _get_offline_tile_service(self):
+		if self._offline_tile_service is not None:
+			return self._offline_tile_service
+		if OfflineTileService is None:
+			raise RuntimeError("offline tile service is unavailable; missing offline_tile_lib dependencies")
+		self._offline_tile_service = OfflineTileService(
+			project_root=self.review_paths.project_root,
+			runtime_root=self.runtime_root,
+			cache_root=self.offline_tile_cache_root,
+		)
+		return self._offline_tile_service
 
 	def _send_admin_error(
 		self,
@@ -616,6 +676,24 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 			raise ValueError(f"Unsupported upload_type: {value!r}")
 		return upload_type
 
+	def _resolve_actual_upload_type(self, source_path: Path, payload: dict) -> str:
+		requested_upload_type = self._normalize_upload_type(payload.get("upload_type"))
+		field_mapping = payload.get("field_mapping")
+		if requested_upload_type != "auto":
+			try:
+				return detect_user_upload_type(
+					source_path,
+					requested_upload_type=requested_upload_type,
+					field_mapping=field_mapping,
+				)
+			except Exception:
+				return requested_upload_type
+		return detect_user_upload_type(
+			source_path,
+			requested_upload_type=requested_upload_type,
+			field_mapping=field_mapping,
+		)
+
 	def _normalize_annotation_mode(self, value) -> str:
 		annotation_mode = str(value or "annotatable").strip().lower() or "annotatable"
 		if annotation_mode not in ANNOTATION_MODES:
@@ -714,13 +792,122 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 		_write_json(meta_path, meta_payload)
 		self._refresh_batches()
 
-	def _process_upload(self, upload_root: Path, catalog_path: Path, payload: dict, actor: ActorIdentity) -> dict:
+	def _publish_upload_preview(self, upload_root: Path, catalog_path: Path, payload: dict, actor: ActorIdentity) -> dict:
 		self._ensure_upload_owner(payload, actor)
-		upload_type = self._normalize_upload_type(payload.get("upload_type"))
 		annotation_mode = self._normalize_annotation_mode(payload.get("annotation_mode"))
 		visibility_scope = normalize_visibility_scope(payload.get("visibility_scope"))
-		field_mapping = normalize_user_upload_field_mapping(upload_type, payload.get("field_mapping"))
 		source_path = self._resolve_upload_source_path(upload_root, payload)
+		upload_type = self._resolve_actual_upload_type(source_path, payload)
+		field_mapping = normalize_user_upload_field_mapping(upload_type, payload.get("field_mapping"))
+		asset_id = str(payload.get("asset_id") or "").strip() or generate_asset_id(upload_type, actor.actor_id)
+		batch_name = str(payload.get("batch_name") or "").strip() or generate_batch_name(upload_type, actor.actor_id)
+		asset_root = resolve_asset_dataset_root(self.upload_layout, actor.actor_id, asset_id)
+		asset_version_root = asset_root / "v001"
+		result_root = asset_version_root / "result"
+		published_batch_root = resolve_published_batch_root(
+			self.upload_layout,
+			batch_name,
+			visibility_scope,
+			actor.actor_id,
+		)
+		if asset_version_root.exists():
+			shutil.rmtree(asset_version_root)
+		asset_version_root.mkdir(parents=True, exist_ok=True)
+
+		title = str(payload.get("display_name") or payload.get("original_name") or batch_name).strip() or batch_name
+		if upload_type == "trajectory4":
+			adapter_report = build_trajectory4_result(source_path, result_root, title=title, field_mapping=field_mapping)
+			ui_mode = "trajectory_layers"
+			review_reference_files = ["gps.csv"]
+		else:
+			adapter_report = build_signal6_result(
+				source_path,
+				result_root,
+				title=title,
+				field_mapping=field_mapping,
+				pipeline_mode="legacy",
+			)
+			ui_mode = "trajectory_layers"
+			review_reference_files = ["signal.csv"]
+
+		ui_config = {
+			"ui_mode": ui_mode,
+			"annotation_enabled": annotation_mode == "annotatable",
+			"hide_review_panel": annotation_mode != "annotatable",
+			"review_reference_files": review_reference_files,
+			"filter_state_options": adapter_report.get("filter_state_options") or [],
+			"point_status_types": adapter_report.get("filter_state_options") or [],
+		}
+		extra_metadata = {
+			"owner_actor_id": actor.actor_id,
+			"owner_display_name": actor.display_name,
+			"visibility_scope": visibility_scope,
+			"annotation_mode": annotation_mode,
+			"field_mapping": field_mapping,
+			"source_upload_id": str(payload.get("upload_id") or upload_root.name),
+			"source_asset_id": asset_id,
+			"ui_config": ui_config,
+			"preview_only": True,
+		}
+		publish_report = publish_batch(
+			published_root=published_batch_root.parent,
+			batch_name=batch_name,
+			source_result_root=result_root,
+			label=title,
+			version="user-upload-preview-v1",
+			keywords=["user-upload", upload_type, visibility_scope, annotation_mode, "preview"],
+			status="preview_ready",
+			force=True,
+			validate=True,
+			extra_metadata=extra_metadata,
+		)
+		batch_catalog_payload = dict(publish_report["metadata"])
+		batch_catalog_payload["batch_name"] = batch_name
+		batch_catalog_payload["batch_root"] = str(published_batch_root)
+		batch_catalog_payload["source_path"] = str(source_path)
+		self._upsert_batch_catalog_metadata(batch_name, batch_catalog_payload)
+
+		write_json_metadata(
+			resolve_asset_catalog_path(self.upload_layout, asset_id),
+			{
+				"asset_id": asset_id,
+				"owner_actor_id": actor.actor_id,
+				"source_upload_id": str(payload.get("upload_id") or upload_root.name),
+				"upload_type": upload_type,
+				"asset_root": str(asset_root),
+				"asset_version_root": str(asset_version_root),
+				"result_root": str(result_root),
+				"batch_name": batch_name,
+				"generated_at": _utc_now(),
+				"preview_only": True,
+			},
+		)
+		return {
+			"status": "preview_ready",
+			"upload_type": upload_type,
+			"asset_id": asset_id,
+			"batch_name": batch_name,
+			"published_batch_name": batch_name,
+			"asset_root": str(asset_root),
+			"result_root": str(result_root),
+			"published_batch_root": str(published_batch_root),
+			"published_at": _utc_now(),
+			"filter_state_options": adapter_report.get("filter_state_options") or [],
+			"review_reference_files": review_reference_files,
+			"ui_mode": ui_mode,
+			"error": "",
+			"error_summary": "",
+			"note": "仅上传已生成原始预览，可直接打开；后续仍可触发正式处理。",
+			"preview_only": True,
+		}
+
+	def _process_upload(self, upload_root: Path, catalog_path: Path, payload: dict, actor: ActorIdentity) -> dict:
+		self._ensure_upload_owner(payload, actor)
+		annotation_mode = self._normalize_annotation_mode(payload.get("annotation_mode"))
+		visibility_scope = normalize_visibility_scope(payload.get("visibility_scope"))
+		source_path = self._resolve_upload_source_path(upload_root, payload)
+		upload_type = self._resolve_actual_upload_type(source_path, payload)
+		field_mapping = normalize_user_upload_field_mapping(upload_type, payload.get("field_mapping"))
 		asset_id = str(payload.get("asset_id") or "").strip() or generate_asset_id(upload_type, actor.actor_id)
 		batch_name = str(payload.get("batch_name") or "").strip() or generate_batch_name(upload_type, actor.actor_id)
 		asset_root = resolve_asset_dataset_root(self.upload_layout, actor.actor_id, asset_id)
@@ -740,6 +927,7 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 		record["status"] = "processing"
 		record["error"] = ""
 		record["error_summary"] = ""
+		record["upload_type"] = upload_type
 		record["asset_id"] = asset_id
 		record["batch_name"] = batch_name
 		record["field_mapping"] = field_mapping
@@ -748,13 +936,23 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 		title = str(record.get("display_name") or record.get("original_name") or batch_name).strip() or batch_name
 		if upload_type == "trajectory4":
 			adapter_report = build_trajectory4_result(source_path, result_root, title=title, field_mapping=field_mapping)
+			ui_mode = "trajectory_layers"
 			review_reference_files = ["gps.csv"]
 		else:
-			adapter_report = build_signal6_result(source_path, result_root, title=title, field_mapping=field_mapping)
-			review_reference_files = ["signal.csv"]
+			adapter_report = build_signal6_result(
+				source_path,
+				result_root,
+				title=title,
+				field_mapping=field_mapping,
+				pipeline_mode=self.signal6_pipeline_mode,
+			)
+			ui_mode = str(adapter_report.get("ui_mode") or ("chain2" if self.signal6_pipeline_mode == "v311" else "trajectory_layers"))
+			review_reference_files = list(adapter_report.get("review_reference_files") or [])
+			if not review_reference_files:
+				review_reference_files = ["line.csv", "fmm.csv"] if ui_mode == "chain2" else ["signal.csv"]
 
 		ui_config = {
-			"ui_mode": "trajectory_layers",
+			"ui_mode": ui_mode,
 			"annotation_enabled": annotation_mode == "annotatable",
 			"hide_review_panel": annotation_mode != "annotatable",
 			"review_reference_files": review_reference_files,
@@ -813,14 +1011,14 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 				"asset_root": str(asset_root),
 				"result_root": str(result_root),
 				"published_batch_root": str(published_batch_root),
-				"published_at": _utc_now(),
-				"filter_state_options": adapter_report.get("filter_state_options") or [],
-				"review_reference_files": review_reference_files,
-				"ui_mode": "trajectory_layers",
-				"error": "",
-				"error_summary": "",
-			}
-		)
+					"published_at": _utc_now(),
+					"filter_state_options": adapter_report.get("filter_state_options") or [],
+					"review_reference_files": review_reference_files,
+					"ui_mode": ui_mode,
+					"error": "",
+					"error_summary": "",
+				}
+			)
 		record = self._persist_upload_record(upload_root, catalog_path, record)
 		self._refresh_batches()
 		return record
@@ -828,6 +1026,21 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 	def do_GET(self) -> None:
 		parsed = urlparse(self.path)
 		actor = self._current_actor()
+		offline_tile_match = re.fullmatch(r"/offline_tiles/beijing/(\d+)/(\d+)/(\d+)\.png", parsed.path)
+		if offline_tile_match:
+			try:
+				z = int(offline_tile_match.group(1))
+				x = int(offline_tile_match.group(2))
+				y = int(offline_tile_match.group(3))
+				payload = self._get_offline_tile_service().render_png(z, x, y)
+			except FileNotFoundError as exc:
+				self._send_error_json(str(exc), status=HTTPStatus.NOT_FOUND)
+				return
+			except Exception as exc:
+				self._send_error_json(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
+				return
+			self._send_png(payload)
+			return
 		if parsed.path == "/":
 			self.send_response(HTTPStatus.FOUND)
 			self.send_header("Location", "/web/index.html")
@@ -931,7 +1144,27 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 			if not uid:
 				self._send_error_json("uid is required", status=HTTPStatus.BAD_REQUEST)
 				return
-			self._send_json({"annotations": read_timeline_annotations(paths, uid, reviewer_id=reviewer_id)})
+			self._send_json({"annotations": read_timeline_annotations(paths, uid, reviewer_id=reviewer_id, read_only=True)})
+			return
+		if parsed.path == "/api/track-edits":
+			try:
+				_, paths = self._resolve_review_paths(parsed, actor=actor)
+			except ValueError as exc:
+				self._send_error_json(str(exc), status=HTTPStatus.BAD_REQUEST)
+				return
+			except PermissionError as exc:
+				self._send_error_json(str(exc), status=HTTPStatus.FORBIDDEN)
+				return
+			query = parse_qs(parsed.query)
+			uid = query.get("uid", [None])[0]
+			reviewer_id = query.get("reviewer_id", [None])[0]
+			if not uid:
+				self._send_error_json("uid is required", status=HTTPStatus.BAD_REQUEST)
+				return
+			if not reviewer_id:
+				self._send_error_json("reviewer_id is required", status=HTTPStatus.BAD_REQUEST)
+				return
+			self._send_json({"track_edits": read_track_edits(paths, uid, reviewer_id=reviewer_id)})
 			return
 		if parsed.path == "/api/timeline-annotations/aggregate":
 			try:
@@ -948,6 +1181,41 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 				self._send_error_json("uid is required", status=HTTPStatus.BAD_REQUEST)
 				return
 			self._send_json({"aggregate": get_timeline_annotation_aggregate(paths, uid)})
+			return
+		if parsed.path == "/api/export/reviewer-bundle/download":
+			try:
+				_, paths = self._resolve_review_paths(parsed, actor=actor)
+				query = parse_qs(parsed.query)
+				reviewer_id = str(query.get("reviewer_id", [""])[0]).strip()
+				bundle_name = Path(str(query.get("bundle_name", [""])[0]).strip()).name
+				if not reviewer_id:
+					self._send_error_json("reviewer_id is required", status=HTTPStatus.BAD_REQUEST)
+					return
+				if not bundle_name:
+					self._send_error_json("bundle_name is required", status=HTTPStatus.BAD_REQUEST)
+					return
+				profile = ensure_reviewer_profile(paths, reviewer_id=reviewer_id)
+				zip_path = (
+					paths.review_root
+					/ "review_exports"
+					/ "reviewers"
+					/ profile["reviewer_id"]
+					/ f"{bundle_name}.zip"
+				)
+				if not zip_path.exists() or not zip_path.is_file():
+					self._send_error_json("bundle zip not found", status=HTTPStatus.NOT_FOUND)
+					return
+			except ValueError as exc:
+				self._send_error_json(str(exc), status=HTTPStatus.BAD_REQUEST)
+				return
+			except PermissionError as exc:
+				self._send_error_json(str(exc), status=HTTPStatus.FORBIDDEN)
+				return
+			self._send_file(
+				zip_path,
+				content_type="application/zip",
+				download_name=zip_path.name,
+			)
 			return
 		super().do_GET()
 
@@ -1044,19 +1312,39 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 
 		if parsed.path == "/api/export/reviewer-bundle":
 			try:
-				_, paths = self._resolve_review_paths(parsed, payload, actor=actor)
+				batch_name, paths = self._resolve_review_paths(parsed, payload, actor=actor)
 				decisions = payload.get("decisions")
 				if decisions is None:
 					decisions = ["accept", "reject", "skip"]
-				manifest = export_reviewer_bundle(
-					paths,
-					reviewer_id=str(payload.get("reviewer_id") or "").strip(),
-					output_root=str(payload.get("output_root") or "").strip() or None,
-					bundle_name=str(payload.get("bundle_name") or "").strip() or None,
-					clean=bool(payload.get("clean", False)),
-					decisions=list(decisions),
-					create_zip=bool(payload.get("create_zip", False)),
-				)
+				export_mode = str(payload.get("export_mode") or "").strip().lower()
+				export_args = {
+					"paths": paths,
+					"reviewer_id": str(payload.get("reviewer_id") or "").strip(),
+					"output_root": str(payload.get("output_root") or "").strip() or None,
+					"bundle_name": str(payload.get("bundle_name") or "").strip() or None,
+					"clean": bool(payload.get("clean", False)),
+					"decisions": list(decisions),
+					"uids": list(payload.get("uids") or []),
+					"trajectory_tags": list(payload.get("trajectory_tags") or []),
+					"create_zip": bool(payload.get("create_zip", False)),
+				}
+				if export_mode == "segment_label_dataset":
+					manifest = export_segment_label_dataset(
+						interval_seconds=int(payload.get("interval_seconds") or 5),
+						timestamp_unit=str(payload.get("timestamp_unit") or "ms"),
+						labeled_span_only=bool(payload.get("labeled_span_only", False)),
+						**export_args,
+					)
+				else:
+					manifest = export_reviewer_bundle(**export_args)
+				manifest["export_mode"] = export_mode or "reviewer_bundle"
+				if manifest.get("zip_path") and manifest.get("bundle_name"):
+					manifest["batch"] = batch_name
+					manifest["download_url"] = (
+						f"/api/export/reviewer-bundle/download?batch={quote(batch_name)}"
+						f"&reviewer_id={quote(str(manifest.get('reviewer_profile', {}).get('reviewer_id') or payload.get('reviewer_id') or ''))}"
+						f"&bundle_name={quote(str(manifest.get('bundle_name') or ''))}"
+					)
 			except PermissionError as exc:
 				self._send_error_json(str(exc), status=HTTPStatus.FORBIDDEN)
 				return
@@ -1080,6 +1368,22 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 				self._send_error_json(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
 				return
 			self._send_json({"annotations": annotations})
+			return
+
+		if parsed.path == "/api/track-edits":
+			try:
+				_, paths = self._resolve_review_paths(parsed, payload, actor=actor)
+				track_edits = write_track_edits(paths, payload)
+			except ValueError as exc:
+				self._send_error_json(str(exc), status=HTTPStatus.BAD_REQUEST)
+				return
+			except PermissionError as exc:
+				self._send_error_json(str(exc), status=HTTPStatus.FORBIDDEN)
+				return
+			except Exception as exc:
+				self._send_error_json(str(exc), status=HTTPStatus.INTERNAL_SERVER_ERROR)
+				return
+			self._send_json({"track_edits": track_edits})
 			return
 
 		self._send_error_json("Unknown API endpoint", status=HTTPStatus.NOT_FOUND)
@@ -1116,7 +1420,7 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 			upload_type = self._normalize_upload_type(payload.get("upload_type"))
 			visibility_scope = normalize_visibility_scope(payload.get("visibility_scope"))
 			annotation_mode = self._normalize_annotation_mode(payload.get("annotation_mode"))
-			field_mapping = normalize_user_upload_field_mapping(upload_type, payload.get("field_mapping"))
+			field_mapping = normalize_user_upload_field_mapping("trajectory4" if upload_type == "auto" else upload_type, payload.get("field_mapping")) if payload.get("field_mapping") else {}
 		except json.JSONDecodeError as exc:
 			self._send_upload_error("invalid_json", f"Invalid JSON body: {exc}", status=HTTPStatus.BAD_REQUEST)
 			return
@@ -1190,7 +1494,14 @@ class ReviewRequestHandler(SimpleHTTPRequestHandler):
 			}
 		)
 		record = self._persist_upload_record(upload_root, catalog_path, record)
-		self._send_json({"status": "uploaded", "upload": record}, status=HTTPStatus.CREATED)
+		try:
+			record.update(self._publish_upload_preview(upload_root, catalog_path, record, actor))
+			record = self._persist_upload_record(upload_root, catalog_path, record)
+			self._refresh_batches()
+		except (FileNotFoundError, UserUploadAdapterError, ValueError) as exc:
+			record["note"] = f"文件已上传，但原始预览生成失败：{exc}"
+			record = self._persist_upload_record(upload_root, catalog_path, record)
+		self._send_json({"status": record.get("status") or "uploaded", "upload": record}, status=HTTPStatus.CREATED)
 
 	def _handle_process_upload(self, upload_id: str, actor: ActorIdentity) -> None:
 		try:
@@ -1369,6 +1680,16 @@ def parse_args() -> argparse.Namespace:
 		default=DEFAULT_UPLOAD_MAX_BYTES,
 		help="Maximum accepted admin upload size in bytes",
 	)
+	parser.add_argument(
+		"--signal6-pipeline-mode",
+		default="v311",
+		help="Signal6 processing mode: legacy or v311 (snap+OD+fmm).",
+	)
+	parser.add_argument(
+		"--offline-tile-cache-root",
+		default=None,
+		help="Optional cache root for generated offline vector tiles.",
+	)
 	return parser.parse_args()
 
 
@@ -1402,6 +1723,7 @@ def main() -> None:
 	if incoming_root and resolved_batches_root:
 		if incoming_root == resolved_batches_root or _is_relative_to(incoming_root, resolved_batches_root):
 			raise SystemExit("--incoming-root must be outside --batches-root")
+	signal6_pipeline_mode = normalize_signal6_pipeline_mode(args.signal6_pipeline_mode)
 	default_batch = batch_order[0] if batch_order else DEFAULT_BATCH_NAME
 	handler = lambda *handler_args, **handler_kwargs: ReviewRequestHandler(
 		*handler_args,
@@ -1409,13 +1731,15 @@ def main() -> None:
 		review_paths=paths,
 		batches_root=resolved_batches_root,
 		batches=batches,
-		batch_order=batch_order,
-		default_batch=default_batch,
-		incoming_root=incoming_root,
-		runtime_root=runtime_root,
-		upload_max_bytes=args.upload_max_bytes,
-		**handler_kwargs,
-	)
+			batch_order=batch_order,
+			default_batch=default_batch,
+			incoming_root=incoming_root,
+			runtime_root=runtime_root,
+			offline_tile_cache_root=Path(args.offline_tile_cache_root).expanduser().resolve() if args.offline_tile_cache_root else None,
+			upload_max_bytes=args.upload_max_bytes,
+			signal6_pipeline_mode=signal6_pipeline_mode,
+			**handler_kwargs,
+		)
 	with ThreadingHTTPServer((args.host, args.port), handler) as httpd:
 		print(
 			f"Serving review UI on http://{args.host}:{args.port}/web/index.html "

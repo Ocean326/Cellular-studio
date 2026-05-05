@@ -117,13 +117,17 @@
 			renderReviewerIdentity();
 			await loadReviewIndex();
 			if (currentUid) {
-				const meta = await ensureUidMeta(currentUid);
-				await loadReviewForUid(currentUid, meta.exists);
-				await loadTimelineAnnotationsForUid(currentUid);
-				renderTimeScrubberControl();
+				await renderUid(currentUid, {
+					forceFit: false,
+					preserveScrubberTime: true,
+					resetScrubberVisibleRange: false,
+					resetTimeWindow: false,
+					resetTrackEditState: true,
+				});
 			} else {
 				renderTriageBoard({ resetVisibleCounts: false });
 			}
+			renderTrackEditPanel();
 		}
 
 		function getUiPresetForMode(mode) {
@@ -349,6 +353,27 @@
 			`;
 		}
 
+		async function toggleReplayTimelineForReviewer(reviewerId, reviewerName = "") {
+			const normalizedReviewerId = String(reviewerId || "").trim();
+			if (!currentUid || !normalizedReviewerId) return false;
+			if (isReplayTimelineActiveForReviewer(normalizedReviewerId)) {
+				clearReplayTimelineState({ render: true });
+				renderReviewAggregatePanel(currentUidAggregate);
+				setReviewStatus("已退出 reviewer 分段回放", false);
+				return true;
+			}
+			const loaded = await loadReplayTimelineAnnotationsForUid(currentUid, {
+				reviewerId: normalizedReviewerId,
+				reviewerName: String(reviewerName || "").trim() || normalizedReviewerId,
+				batchName: currentBatchName,
+			});
+			renderReviewAggregatePanel(currentUidAggregate);
+			if (loaded) {
+				setReviewStatus(`正在回放 ${getReplayTimelineSourceLabel()} 的分段`, false);
+			}
+			return loaded;
+		}
+
 		function renderReviewAggregatePanel(aggregate = null) {
 			if (!SHOW_REVIEW_AGGREGATE) {
 				currentUidAggregate = null;
@@ -356,9 +381,12 @@
 			}
 			const summaryEl = document.getElementById("review-aggregate-summary");
 			const listEl = document.getElementById("review-aggregate-list");
+			const replayLabel = getReplayTimelineSourceLabel();
 			currentUidAggregate = aggregate || null;
 			if (!aggregate || !Array.isArray(aggregate.latest_reviews)) {
-				summaryEl.textContent = currentUid ? "当前 UID 暂无多人摘要" : "选择 UID 后显示多人摘要";
+				summaryEl.textContent = currentUid
+					? (replayLabel ? `当前 UID 暂无多人摘要 | 回放 ${replayLabel}` : "当前 UID 暂无多人摘要")
+					: "选择 UID 后显示多人摘要";
 				listEl.innerHTML = `<div class="review-aggregate-empty">暂无数据</div>`;
 				syncReviewAggregateChrome(null);
 				return;
@@ -367,7 +395,7 @@
 			const decisionCounts = aggregate.decision_counts || {};
 			const reviewerCount = Number(aggregate.reviewer_count || latestReviews.length || 0);
 			summaryEl.textContent = reviewerCount
-				? `已参与 ${reviewerCount} 人 | 保留 ${decisionCounts.accept || 0} / 排除 ${decisionCounts.reject || 0} / 跳过 ${decisionCounts.skip || 0}`
+				? `已参与 ${reviewerCount} 人 | 保留 ${decisionCounts.accept || 0} / 排除 ${decisionCounts.reject || 0} / 跳过 ${decisionCounts.skip || 0}${replayLabel ? ` | 回放 ${replayLabel}` : ""}`
 				: "当前 UID 暂无多人摘要";
 			if (!latestReviews.length) {
 				listEl.innerHTML = `<div class="review-aggregate-empty">暂无 reviewer 审核记录</div>`;
@@ -379,6 +407,7 @@
 			);
 			listEl.innerHTML = latestReviews.map(item => {
 				const timeline = timelineByReviewer[item.reviewer_id] || {};
+				const replayActive = isReplayTimelineActiveForReviewer(item.reviewer_id);
 				const timelineText = (timeline.pin_count || timeline.segment_count || timeline.window_quick_segment_count)
 					? ` | pin ${timeline.pin_count || 0} / segment ${timeline.segment_count || 0}${timeline.window_quick_segment_count ? ` / quick ${timeline.window_quick_segment_count}` : ""}`
 					: "";
@@ -386,6 +415,16 @@
 				const tagText = getReviewTags(item).join(" / ");
 				const tagHtml = tagText ? `<div class="review-aggregate-note">Tag：${escapeHtml(tagText)}</div>` : "";
 				const notes = item.notes ? `<div class="review-aggregate-note">${escapeHtml(item.notes)}</div>` : "";
+				const replayButtonHtml = item.reviewer_id ? `
+					<div class="review-aggregate-actions">
+						<button
+							type="button"
+							class="review-aggregate-replay-btn${replayActive ? " active" : ""}"
+							data-replay-reviewer-id="${escapeHtml(item.reviewer_id || "")}"
+							data-replay-reviewer-name="${escapeHtml(item.reviewer_name || item.reviewer || item.reviewer_id || "")}"
+						>${replayActive ? "关闭回放" : "回放分段"}</button>
+					</div>
+				` : "";
 				return `
 					<div class="review-aggregate-item">
 						<div class="review-aggregate-item-top">
@@ -393,6 +432,7 @@
 							<div>${getReviewBadgeHtml(item)}</div>
 						</div>
 						<div class="review-aggregate-meta">${escapeHtml(formatReviewTimestamp(item.timestamp) || "-")}${escapeHtml(referenceText)}${escapeHtml(timelineText)}</div>
+						${replayButtonHtml}
 						${tagHtml}
 						${notes}
 					</div>
@@ -425,14 +465,15 @@
 			const aggregateText = SHOW_REVIEW_AGGREGATE && currentUidAggregate?.reviewer_count
 				? ` | 多人 ${currentUidAggregate.reviewer_count}`
 				: "";
+			const replayText = getReplayTimelineSourceLabel() ? ` | 回放 ${getReplayTimelineSourceLabel()}` : "";
 			if (!review) {
-				meta.textContent = `${uidText} | 当前标注者：${reviewerName} | 当前状态：未设置 | 时间：- | Tag：无 | 参考图层：${fallbackReferenceSource || "未设置"}${aggregateText}`;
+				meta.textContent = `${uidText} | 当前标注者：${reviewerName} | 当前状态：未设置 | 时间：- | Tag：无 | 参考图层：${fallbackReferenceSource || "未设置"}${aggregateText}${replayText}`;
 				return;
 			}
 			const timestamp = formatReviewTimestamp(review.timestamp) || "-";
 			const ref = review.reference_source || fallbackReferenceSource || "未设置";
 			const tagText = getReviewTags(review).join(" / ") || "无";
-			meta.textContent = `${uidText} | 当前标注者：${reviewerName} | 当前状态：${getReviewDecisionLabel(review.decision)} | 时间：${timestamp} | Tag：${tagText} | 参考图层：${ref}${aggregateText}`;
+			meta.textContent = `${uidText} | 当前标注者：${reviewerName} | 当前状态：${getReviewDecisionLabel(review.decision)} | 时间：${timestamp} | Tag：${tagText} | 参考图层：${ref}${aggregateText}${replayText}`;
 		}
 
 		function populateReviewForm(uid, exists, review) {

@@ -13,8 +13,10 @@
 			const idleInput = document.getElementById("annotation-idle-opacity");
 			const focusValue = document.getElementById("annotation-focus-opacity-value");
 			const idleValue = document.getElementById("annotation-idle-opacity-value");
+			const exclusiveModeInput = document.getElementById("annotation-exclusive-mode");
 			if (focusInput) focusInput.value = annotationSettings.focusOpacity.toFixed(2);
 			if (idleInput) idleInput.value = annotationSettings.idleOpacity.toFixed(2);
+			if (exclusiveModeInput) exclusiveModeInput.checked = !!annotationSettings.exclusiveSegments;
 			if (focusValue) focusValue.textContent = `${Math.round(annotationSettings.focusOpacity * 100)}%`;
 			if (idleValue) idleValue.textContent = `${Math.round(annotationSettings.idleOpacity * 100)}%`;
 			const previewSegment = document.getElementById("annotation-preview-segment");
@@ -378,6 +380,7 @@
 
 		function handleReviewShortcutKeyboardEvent(event) {
 			if (!event || event.repeat) return false;
+			if (trackEditState.enabled) return false;
 			if (currentUiConfig.annotationEnabled === false || currentUiConfig.hideReviewPanel) return false;
 			const binding = buildReviewChordBindingFromKeyboardEvent(event);
 			if (!binding) return false;
@@ -412,10 +415,91 @@
 			overlay.setAttribute("aria-hidden", "true");
 		}
 
+		let currentMapTileCoordinateSystem = getMapTileCoordinateSystem();
+
+		function getResolvedMapTileConfig() {
+			return typeof getMapTileConfig === "function" ? getMapTileConfig() : MAP_TILE_CONFIG;
+		}
+
+		function buildTileLayerOptions(config) {
+			return {
+				attribution: config.attribution || "Basemap",
+				keepBuffer: 6,
+				updateWhenIdle: true,
+				updateWhenZooming: false,
+				minZoom: config.minZoom,
+				maxZoom: config.maxZoom,
+				maxNativeZoom: config.maxNativeZoom,
+				bounds: config.bounds,
+				errorTileUrl: config.errorTileUrl || "",
+				detectRetina: !!config.detectRetina,
+				noWrap: false,
+			};
+		}
+
+		function rebuildMapTileLayer(options = {}) {
+			if (!map) return;
+			const nextConfig = getResolvedMapTileConfig();
+			const previousCoordinateSystem = String(
+				options.previousCoordinateSystem || currentMapTileCoordinateSystem || nextConfig.coordinateSystem || "wgs84"
+			).trim().toLowerCase();
+			const nextCoordinateSystem = String(nextConfig.coordinateSystem || "wgs84").trim().toLowerCase();
+			const shouldKeepView = options.keepView !== false;
+			const center = shouldKeepView && typeof map.getCenter === "function" ? map.getCenter() : null;
+			const zoom = shouldKeepView && typeof map.getZoom === "function"
+				? map.getZoom()
+				: (Number.isFinite(Number(nextConfig.mapZoom)) ? Number(nextConfig.mapZoom) : 11);
+			if (tileLayer && typeof map.hasLayer === "function" && map.hasLayer(tileLayer)) {
+				map.removeLayer(tileLayer);
+			}
+			tileLayer = nextConfig.url ? L.tileLayer(nextConfig.url, buildTileLayerOptions(nextConfig)) : null;
+			if (tileLayer) tileLayer.addTo(map);
+			currentMapTileCoordinateSystem = nextCoordinateSystem;
+			if (!center) return;
+			const [nextLat, nextLon] = convertLatLonBetweenTileSystems(
+				center.lat,
+				center.lng,
+				previousCoordinateSystem,
+				nextCoordinateSystem
+			);
+			if (typeof map.setView === "function") {
+				map.setView([nextLat, nextLon], zoom, { animate: false });
+			} else if (typeof map.panTo === "function") {
+				map.panTo([nextLat, nextLon]);
+				if (typeof map._zoom === "number") map._zoom = zoom;
+			}
+			syncTimeLabelScale();
+		}
+
+		function applyBasemapMode(mode, options = {}) {
+			const previousConfig = { ...getResolvedMapTileConfig() };
+			const nextConfig = applyMapTileMode(mode, { persist: options.persist !== false });
+			rebuildMapTileLayer({
+				keepView: options.keepView !== false,
+				previousCoordinateSystem: previousConfig.coordinateSystem,
+			});
+			clearRenderedCache();
+			if (currentUid) {
+				void renderUid(currentUid, {
+					forceFit: false,
+					skipReviewReload: true,
+					preserveScrubberTime: true,
+					resetScrubberVisibleRange: false,
+					resetTimeWindow: false,
+				});
+			}
+			return nextConfig;
+		}
+
 		function initMap() {
-			map = L.map("map", { center: [39.9, 116.4], zoom: 11, preferCanvas: true, keyboard: false });
-			tileLayer = L.tileLayer(GAODE_TILE, { attribution: "Gaode", keepBuffer: 6, updateWhenIdle: true, updateWhenZooming: false });
-			tileLayer.addTo(map);
+			const mapTileConfig = getResolvedMapTileConfig();
+			const initialCenter = Array.isArray(mapTileConfig.mapCenter) && mapTileConfig.mapCenter.length >= 2
+				? [Number(mapTileConfig.mapCenter[0]) || 39.9, Number(mapTileConfig.mapCenter[1]) || 116.4]
+				: [39.9, 116.4];
+			const initialZoom = Number.isFinite(Number(mapTileConfig.mapZoom)) ? Number(mapTileConfig.mapZoom) : 11;
+			map = L.map("map", { center: initialCenter, zoom: initialZoom, preferCanvas: true, keyboard: false });
+			currentMapTileCoordinateSystem = String(mapTileConfig.coordinateSystem || "wgs84").trim().toLowerCase();
+			rebuildMapTileLayer({ keepView: false, previousCoordinateSystem: currentMapTileCoordinateSystem });
 			L.control.scale({ imperial: false }).addTo(map);
 			syncTimeLabelScale();
 			lastRenderZoomBucket = getCurrentRenderZoomBucket();
@@ -424,6 +508,7 @@
 				syncTimeLabelScale();
 				maybeRerenderForZoomChange();
 			});
+			syncTrackEditMapInteractionLock();
 		}
 
 		function getCurrentRenderZoomBucket() {
@@ -434,8 +519,10 @@
 			const nextBucket = getCurrentRenderZoomBucket();
 			if (nextBucket === lastRenderZoomBucket) return;
 			lastRenderZoomBucket = nextBucket;
-			if (!currentUid) return;
-			void renderUid(currentUid, { forceFit: false, skipReviewReload: true, resetTimeWindow: false });
+			if (!currentUid || !map) return;
+			// 仅按新缩放级别重绘地图（采样/聚合策略随 zoomBucket 变化）。不要调用 renderUid：
+			// renderUid 会重新 fetch 数据并从服务端 loadTrackEditsForUid，成功响应会覆盖本地未保存的修正。
+			renderMapDisplayFromCurrentState({ exists: currentExistsByLayer || {}, forceFit: false });
 		}
 
 		function getTimeLabelScaleForZoom(zoom) {
@@ -458,13 +545,50 @@
 			return fallback || pointStatusTypes[0] || normalized || "";
 		}
 
+		function buildTrackEditPatchRenderSignature(trackEdits = getCurrentTrackEdits()) {
+			return (trackEdits?.pointPatches || [])
+				.map((patch) => JSON.stringify([
+					patch.pointId || "",
+					patch.layerKey || "",
+					patch.rowIndex ?? null,
+					patch.timestamp ?? null,
+					patch.position?.latitude ?? null,
+					patch.position?.longitude ?? null,
+					Object.entries(patch.metadata || {}).sort(([left], [right]) => left.localeCompare(right)),
+				]))
+				.join("|");
+		}
+
 		function getRenderSignature() {
-			return JSON.stringify({ layerOrder, layerStyles, statusPointStyles, zoomBucket: getCurrentRenderZoomBucket() });
+			const trackEdits = getCurrentTrackEdits();
+			return JSON.stringify({
+				layerOrder,
+				layerStyles,
+				statusPointStyles,
+				zoomBucket: getCurrentRenderZoomBucket(),
+				trackEditStoreKey: getCurrentTrackEditStoreKey(),
+				trackEditMode: !!trackEditState.enabled,
+				trackEditSelection: [...(trackEditState.selectedPointIds || [])].sort(),
+				trackEditUpdatedAt: trackEdits.updated_at || "",
+				trackEditPatchCount: (trackEdits.pointPatches || []).length,
+				trackEditPatchSignature: buildTrackEditPatchRenderSignature(trackEdits),
+			});
 		}
 
 		let scheduledMapDisplayRefreshFrame = 0;
 		let scheduledMapDisplayRefreshForceFit = false;
 		let lastAppliedMapDisplaySignature = "";
+		let renderUidRequestSequence = 0;
+		let trackEditLoadRequestSequence = 0;
+		let trackEditPersistRequestSequence = 0;
+		let timelineAnnotationLoadRequestSequence = 0;
+		const latestTrackEditLoadRequestByStoreKey = Object.create(null);
+		const latestTrackEditPersistRequestByStoreKey = Object.create(null);
+		const latestTimelineAnnotationLoadRequestByStoreKey = Object.create(null);
+
+		function isRenderUidRequestCurrent(requestSequence) {
+			return requestSequence === renderUidRequestSequence;
+		}
 
 		function cancelScheduledMapDisplayRefresh() {
 			if (scheduledMapDisplayRefreshFrame) {
@@ -1013,6 +1137,7 @@
 			return {
 				focusOpacity,
 				idleOpacity,
+				exclusiveSegments: !!settings?.exclusiveSegments,
 				categories: normalizeAnnotationCategories(settings?.categories),
 				reviewTags: normalizeReviewTagOptions(settings?.reviewTags),
 				reviewShortcuts: normalizeReviewShortcutSettings(settings?.reviewShortcuts),
@@ -1287,7 +1412,7 @@
 		}
 
 		function getLargestCommittedSegmentTimeBounds() {
-			const segments = getCurrentTimelineSegments();
+			const segments = getActiveTimelineSegmentsForDisplay();
 			let best = null;
 			let bestSpan = -1;
 			segments.forEach(segment => {
@@ -1305,7 +1430,7 @@
 		function getUnionAnnotationTimeBoundsForViewport() {
 			let tMin = Infinity;
 			let tMax = -Infinity;
-			getCurrentTimelineSegments().forEach(segment => {
+			getActiveTimelineSegmentsForDisplay().forEach(segment => {
 				const b = normalizeSegmentTimeBounds(segment);
 				if (!b) return;
 				tMin = Math.min(tMin, b.start);
@@ -1545,6 +1670,1443 @@
 			select.disabled = timeScrubberState.focusLayers.length <= 1;
 		}
 
+		function buildReviewerScopedStoreKey(context = {}) {
+			const batchName = String(context.batchName ?? currentBatchName ?? "").trim() || "__default__";
+			const reviewerId = String(context.reviewerId ?? getCurrentReviewerId() ?? "").trim() || "__no_reviewer__";
+			const uid = String(context.uid ?? currentUid ?? "").trim() || "__none__";
+			return `${batchName}::${reviewerId}::${uid}`;
+		}
+
+		function buildReviewerScopedContext(context = {}) {
+			const uid = String(context.uid ?? currentUid ?? "").trim();
+			const reviewerId = String(context.reviewerId ?? getCurrentReviewerId() ?? "").trim();
+			const reviewerName = String(context.reviewerName ?? getCurrentReviewerName() ?? "").trim();
+			const batchName = String(context.batchName ?? currentBatchName ?? "").trim();
+			return {
+				uid,
+				reviewerId,
+				reviewerName,
+				batchName,
+				storeKey: buildReviewerScopedStoreKey({ uid, reviewerId, batchName }),
+			};
+		}
+
+		function isReviewerScopedContextCurrent(context = {}) {
+			return buildReviewerScopedStoreKey(context) === buildReviewerScopedStoreKey();
+		}
+
+		function buildReplayTimelineState(overrides = {}) {
+			return {
+				enabled: false,
+				uid: "",
+				batchName: "",
+				reviewerId: "",
+				reviewerName: "",
+				pins: [],
+				segments: [],
+				segmentPolicy: null,
+				updatedAt: "",
+				sourceLabel: "",
+				...overrides,
+			};
+		}
+
+		function buildReplayTimelineSourceLabel(context = {}) {
+			const reviewerId = String(context.reviewerId ?? replayTimelineState.reviewerId ?? "").trim();
+			const reviewerName = String(context.reviewerName ?? replayTimelineState.reviewerName ?? "").trim();
+			if (reviewerName && reviewerId && reviewerName !== reviewerId) return `${reviewerName} (${reviewerId})`;
+			return reviewerName || reviewerId || "";
+		}
+
+		function isReplayTimelineActiveForContext(context = {}) {
+			const uid = String(context.uid ?? currentUid ?? "").trim();
+			const batchName = String(context.batchName ?? currentBatchName ?? "").trim();
+			return !!replayTimelineState.enabled
+				&& !!String(replayTimelineState.reviewerId || "").trim()
+				&& String(replayTimelineState.uid || "").trim() === uid
+				&& String(replayTimelineState.batchName || "").trim() === batchName;
+		}
+
+		function isReplayTimelineActiveForReviewer(reviewerId) {
+			return isReplayTimelineActiveForContext()
+				&& String(replayTimelineState.reviewerId || "").trim() === String(reviewerId || "").trim();
+		}
+
+		function getReplayTimelineSourceLabel() {
+			if (!isReplayTimelineActiveForContext()) return "";
+			return String(replayTimelineState.sourceLabel || "").trim() || buildReplayTimelineSourceLabel();
+		}
+
+		function getTimelineAnnotationReadOnlyMessage() {
+			const replayLabel = getReplayTimelineSourceLabel();
+			return replayLabel
+				? `当前正在回放 ${replayLabel} 的分段，关闭回放后可编辑`
+				: "当前分段回放为只读模式";
+		}
+
+		function isTimelineAnnotationReadOnly() {
+			return isReplayTimelineActiveForContext();
+		}
+
+		function getActiveTimelinePinsForDisplay(context = {}) {
+			if (isReplayTimelineActiveForContext(context)) {
+				return Array.isArray(replayTimelineState.pins) ? replayTimelineState.pins : [];
+			}
+			return getCurrentTimelinePins(context);
+		}
+
+		function getActiveTimelineSegmentsForDisplay(context = {}) {
+			if (isReplayTimelineActiveForContext(context)) {
+				return Array.isArray(replayTimelineState.segments) ? replayTimelineState.segments : [];
+			}
+			return getCurrentTimelineSegments(context);
+		}
+
+		function clearReplayTimelineState(options = {}) {
+			const previousReadOnlyMessage = getTimelineAnnotationReadOnlyMessage();
+			replayTimelineState = buildReplayTimelineState();
+			if (trackEditState.statusMessage === previousReadOnlyMessage) {
+				setTrackEditStatus(trackEditState.enabled ? "编辑模式已开启" : "编辑关闭", trackEditState.enabled ? "active" : "idle");
+			}
+			if (options.render !== false) {
+				renderTimeScrubberControl();
+				renderTrackEditPanel();
+			}
+			return true;
+		}
+
+		function reconcileReplayTimelineStateForCurrentSelection(context = {}) {
+			if (!replayTimelineState.enabled) return false;
+			if (isReplayTimelineActiveForContext(context)) return false;
+			clearReplayTimelineState({ render: false });
+			return true;
+		}
+
+		async function loadReplayTimelineAnnotationsForUid(uid, context = {}) {
+			const scopedContext = buildReviewerScopedContext({
+				...context,
+				uid,
+			});
+			if (!scopedContext.uid || !scopedContext.reviewerId) return false;
+			try {
+				const response = await fetch(buildTimelineAnnotationsApiUrl({ uid: scopedContext.uid }, scopedContext));
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				const payload = await response.json();
+				const annotations = payload.annotations || {};
+				replayTimelineState = buildReplayTimelineState({
+					enabled: true,
+					uid: scopedContext.uid,
+					batchName: scopedContext.batchName,
+					reviewerId: scopedContext.reviewerId,
+					reviewerName: scopedContext.reviewerName,
+					pins: Array.isArray(annotations.pins) ? annotations.pins : [],
+					segments: Array.isArray(annotations.segments) ? annotations.segments : [],
+					segmentPolicy: annotations.segmentPolicy || null,
+					updatedAt: String(annotations.updated_at || "").trim(),
+					sourceLabel: buildReplayTimelineSourceLabel(scopedContext),
+				});
+				if (trackEditState.enabled) setTrackEditModeEnabled(false);
+				setTrackEditStatus(getTimelineAnnotationReadOnlyMessage(), "warn");
+				resetSegmentDraftState();
+				hideTimeScrubberContextMenu();
+				syncTimeScrubberFromCurrentData({ preserveTime: false, resetVisibleRange: true });
+				renderTimeScrubberControl();
+				renderTrackEditPanel();
+				return true;
+			} catch (error) {
+				clearReplayTimelineState({ render: false });
+				setReviewStatus(`回放分段读取失败：${error?.message || error}`, true);
+				renderTimeScrubberControl();
+				renderTrackEditPanel();
+				return false;
+			}
+		}
+
+		function ensureTimelineAnnotationsWritable(options = {}) {
+			if (isTimelineAnnotationReadOnly()) {
+				if (options.prompt !== false) setReviewStatus(getTimelineAnnotationReadOnlyMessage(), true);
+				if (options.render !== false) renderTrackEditPanel();
+				return false;
+			}
+			return ensureAnnotationSessionReady(options);
+		}
+
+		function getCurrentTrackEditStoreKey(context = {}) {
+			return buildReviewerScopedStoreKey(context);
+		}
+
+		function buildTrackEditsApiUrl(extraParams = {}, context = {}) {
+			const scopedContext = buildReviewerScopedContext(context);
+			return buildReviewApiUrl("/track-edits", {
+				...extraParams,
+				reviewer_id: scopedContext.reviewerId,
+			});
+		}
+
+		function buildEmptyTrackEdits(uid = currentUid, reviewerId = getCurrentReviewerId(), reviewerName = getCurrentReviewerName()) {
+			const normalizedUid = String(uid || "").trim();
+			return {
+				schema_version: 1,
+				uid: normalizedUid,
+				sample_id: normalizedUid,
+				reviewer_id: String(reviewerId || "").trim(),
+				reviewer_name: String(reviewerName || "").trim(),
+				reviewer: String(reviewerName || "").trim(),
+				updated_at: "",
+				pointPatches: [],
+			};
+		}
+
+		function buildTrackPointId(uid, layerKey, rowIndex, timestamp = null) {
+			const normalizedUid = String(uid || "").trim() || "__none__";
+			const normalizedLayer = String(layerKey || "").trim() || "layer";
+			const normalizedIndex = Math.max(0, Math.round(parseNumericValue(rowIndex) ?? 0));
+			const normalizedTimestamp = timestamp == null ? "na" : String(Math.round(timestamp * 1000));
+			return `${normalizedLayer}:${normalizedUid}:${normalizedTimestamp}:${normalizedIndex}`;
+		}
+
+		function getTrackEditMetadataFieldForLayer(layerKey) {
+			const cfg = layerConfig[layerKey] || {};
+			if (layerKey === "fmm" || layerKey === "line") return "match_type";
+			if (cfg.kind === "gps") return "status";
+			return "";
+		}
+
+		function getTrackEditMetadataOptionsForLayer(layerKey) {
+			const field = getTrackEditMetadataFieldForLayer(layerKey);
+			if (!field) return [];
+			return dedupePreserveOrder(pointStatusTypes || []);
+		}
+
+		function isTrackEditLayerEditable(layerKey) {
+			if (!layerKey || currentUiConfig.annotationEnabled === false) return false;
+			const cfg = layerConfig[layerKey] || {};
+			if (cfg.kind === "stations") return false;
+			if (isOdLayer(layerKey)) return false;
+			return true;
+		}
+
+		function normalizeTrackEditLocalPatch(patch) {
+			if (!patch || typeof patch !== "object") return null;
+			const pointId = String(patch.pointId || "").trim();
+			const layerKey = String(patch.layerKey || "").trim();
+			if (!pointId || !layerKey) return null;
+			const rowIndex = parseNumericValue(patch.rowIndex);
+			const timestamp = parseNumericValue(patch.timestamp);
+			const latitude = parseNumericValue(patch.position?.latitude);
+			const longitude = parseNumericValue(patch.position?.longitude);
+			const metadata = {};
+			if (patch.metadata && typeof patch.metadata === "object" && !Array.isArray(patch.metadata)) {
+				Object.entries(patch.metadata).forEach(([key, value]) => {
+					if (!String(key || "").trim()) return;
+					if (value == null) return;
+					metadata[String(key).trim()] = value;
+				});
+			}
+			const normalized = {
+				pointId,
+				layerKey,
+				rowIndex: rowIndex == null ? 0 : Math.max(0, Math.round(rowIndex)),
+				timestamp: timestamp == null ? null : timestamp,
+				metadata,
+			};
+			if (latitude != null && longitude != null) {
+				normalized.position = {
+					latitude,
+					longitude,
+				};
+			}
+			return normalized;
+		}
+
+		function mergeTrackEditLocalPatch(existingPatch, incomingPatch) {
+			const normalizedExisting = normalizeTrackEditLocalPatch(existingPatch);
+			const normalizedIncoming = normalizeTrackEditLocalPatch(incomingPatch);
+			if (!normalizedExisting) return normalizedIncoming;
+			if (!normalizedIncoming) return normalizedExisting;
+			return normalizeTrackEditLocalPatch({
+				...normalizedExisting,
+				...normalizedIncoming,
+				position: normalizedIncoming.position || normalizedExisting.position,
+				metadata: {
+					...(normalizedExisting.metadata || {}),
+					...(normalizedIncoming.metadata || {}),
+				},
+			});
+		}
+
+		function compareTrackEditPatchOrder(leftPatch, rightPatch) {
+			const leftLayer = String(leftPatch?.layerKey || "");
+			const rightLayer = String(rightPatch?.layerKey || "");
+			const layerComparison = leftLayer.localeCompare(rightLayer);
+			if (layerComparison) return layerComparison;
+			const leftRowIndex = Math.max(0, Math.round(parseNumericValue(leftPatch?.rowIndex) ?? 0));
+			const rightRowIndex = Math.max(0, Math.round(parseNumericValue(rightPatch?.rowIndex) ?? 0));
+			if (leftRowIndex !== rightRowIndex) return leftRowIndex - rightRowIndex;
+			const leftTimestamp = parseNumericValue(leftPatch?.timestamp) ?? 0;
+			const rightTimestamp = parseNumericValue(rightPatch?.timestamp) ?? 0;
+			if (leftTimestamp !== rightTimestamp) return leftTimestamp - rightTimestamp;
+			return String(leftPatch?.pointId || "").localeCompare(String(rightPatch?.pointId || ""));
+		}
+
+		function buildSortedTrackEditPatches(patches = []) {
+			return [...(patches || [])].sort(compareTrackEditPatchOrder);
+		}
+
+		function areTrackEditNumbersEquivalent(leftValue, rightValue) {
+			if (leftValue == null || rightValue == null) return false;
+			return Math.abs(Number(leftValue) - Number(rightValue)) <= 1e-9;
+		}
+
+		function getBaseTrackEditRowForPatch(patch) {
+			const normalizedPatch = normalizeTrackEditLocalPatch(patch);
+			if (!normalizedPatch) return null;
+			const layerRows = currentBaseRawDataByLayer?.[normalizedPatch.layerKey] || [];
+			if (!layerRows.length) return null;
+			return layerRows.find((row) => String(row?.__studioPointId || "").trim() === normalizedPatch.pointId)
+				|| layerRows.find((row) => Math.max(0, Math.round(parseNumericValue(row?.__studioBaseRowIndex) ?? -1)) === normalizedPatch.rowIndex)
+				|| null;
+		}
+
+		function compactTrackEditPatchAgainstBase(patch) {
+			const normalizedPatch = normalizeTrackEditLocalPatch(patch);
+			if (!normalizedPatch) return null;
+			const baseRow = getBaseTrackEditRowForPatch(normalizedPatch);
+			if (!baseRow) return normalizedPatch;
+			const compactedPatch = {
+				pointId: normalizedPatch.pointId,
+				layerKey: normalizedPatch.layerKey,
+				rowIndex: normalizedPatch.rowIndex,
+				timestamp: normalizedPatch.timestamp,
+			};
+			if (normalizedPatch.position) {
+				const baseCoord = getRowCoordinate(baseRow);
+				if (
+					!baseCoord
+					|| !areTrackEditNumbersEquivalent(normalizedPatch.position.latitude, baseCoord.lat)
+					|| !areTrackEditNumbersEquivalent(normalizedPatch.position.longitude, baseCoord.lon)
+				) {
+					compactedPatch.position = normalizedPatch.position;
+				}
+			}
+			const compactedMetadata = {};
+			Object.entries(normalizedPatch.metadata || {}).forEach(([key, value]) => {
+				if (value == null) return;
+				if (String(baseRow?.[key] ?? "").trim() === String(value).trim()) return;
+				compactedMetadata[key] = value;
+			});
+			if (Object.keys(compactedMetadata).length) {
+				compactedPatch.metadata = compactedMetadata;
+			}
+			return compactedPatch.position || Object.keys(compactedPatch.metadata || {}).length
+				? compactedPatch
+				: null;
+		}
+
+		function normalizeTrackEditsLocalRecord(record, context = {}) {
+			const scopedContext = buildReviewerScopedContext({
+				...context,
+				uid: record?.uid || record?.sample_id || context.uid,
+				reviewerId: record?.reviewer_id || record?.reviewerId || context.reviewerId,
+				reviewerName: record?.reviewer_name || record?.reviewerName || record?.reviewer || context.reviewerName,
+			});
+			const empty = buildEmptyTrackEdits(
+				scopedContext.uid,
+				scopedContext.reviewerId,
+				scopedContext.reviewerName,
+			);
+			const mergedPatchesById = new Map();
+			const patchItems = Array.isArray(record?.pointPatches)
+				? record.pointPatches
+				: Array.isArray(record?.patches)
+					? record.patches
+					: Array.isArray(record?.trackEdits)
+						? record.trackEdits
+						: [];
+			patchItems.forEach((item) => {
+				const normalized = normalizeTrackEditLocalPatch(item);
+				if (!normalized) return;
+				mergedPatchesById.set(
+					normalized.pointId,
+					mergeTrackEditLocalPatch(mergedPatchesById.get(normalized.pointId), normalized),
+				);
+			});
+			return {
+				...empty,
+				schema_version: 1,
+				updated_at: String(record?.updated_at || record?.updatedAt || "").trim(),
+				pointPatches: buildSortedTrackEditPatches([...mergedPatchesById.values()]),
+			};
+		}
+
+		function getCurrentTrackEdits(context = {}) {
+			const scopedContext = buildReviewerScopedContext(context);
+			if (!scopedContext.uid) {
+				return buildEmptyTrackEdits(scopedContext.uid, scopedContext.reviewerId, scopedContext.reviewerName);
+			}
+			return normalizeTrackEditsLocalRecord(
+				trackEditsByTrack[getCurrentTrackEditStoreKey(scopedContext)],
+				scopedContext,
+			);
+		}
+
+		function setCurrentTrackEditsRecord(record, context = {}) {
+			const scopedContext = buildReviewerScopedContext({
+				...context,
+				uid: record?.uid || record?.sample_id || context.uid,
+				reviewerId: record?.reviewer_id || record?.reviewerId || context.reviewerId,
+				reviewerName: record?.reviewer_name || record?.reviewerName || record?.reviewer || context.reviewerName,
+			});
+			if (!scopedContext.uid) {
+				return buildEmptyTrackEdits(scopedContext.uid, scopedContext.reviewerId, scopedContext.reviewerName);
+			}
+			const normalized = normalizeTrackEditsLocalRecord({
+				...record,
+				uid: record?.uid || record?.sample_id || scopedContext.uid,
+				sample_id: record?.sample_id || record?.uid || scopedContext.uid,
+				reviewer_id: record?.reviewer_id || record?.reviewerId || scopedContext.reviewerId,
+				reviewer_name: record?.reviewer_name || record?.reviewerName || scopedContext.reviewerName,
+				reviewer: record?.reviewer || scopedContext.reviewerName,
+			}, scopedContext);
+			trackEditsByTrack[getCurrentTrackEditStoreKey(scopedContext)] = normalized;
+			persistTimelineAnnotationStore(TRACK_EDITS_STORAGE_KEY, trackEditsByTrack);
+			return normalized;
+		}
+
+		function inferTrackRowCoordinateKeys(row) {
+			const latKey = row?.latitude != null ? "latitude" : row?.start_latitude != null ? "start_latitude" : row?.lat != null ? "lat" : "";
+			const lonKey = row?.longitude != null ? "longitude" : row?.start_longitude != null ? "start_longitude" : row?.lng != null ? "lng" : row?.lon != null ? "lon" : "";
+			return { latKey, lonKey };
+		}
+
+		function decorateTrackRowsWithPointMeta(uid, layerKey, rows) {
+			return (rows || []).map((row, rowIndex) => {
+				if (!row || typeof row !== "object") return row;
+				const timestamp = getRowMidTimeSeconds(row);
+				const { latKey, lonKey } = inferTrackRowCoordinateKeys(row);
+				row.__studioBaseRowIndex = rowIndex;
+				row.__studioLayerKey = layerKey;
+				row.__studioPointTimestamp = timestamp;
+				row.__studioLatKey = latKey;
+				row.__studioLonKey = lonKey;
+				row.__studioPointId = buildTrackPointId(uid, layerKey, rowIndex, timestamp);
+				return row;
+			});
+		}
+
+		function buildTrackPointReference(uid, layerKey, row, rowIndex) {
+			if (!row || typeof row !== "object") return null;
+			const coord = getRowCoordinate(row);
+			if (!coord) return null;
+			const normalizedRowIndex = Math.max(0, Math.round(parseNumericValue(row?.__studioBaseRowIndex) ?? rowIndex ?? 0));
+			const timestamp = parseNumericValue(row?.__studioPointTimestamp ?? getRowMidTimeSeconds(row));
+			const pointId = String(row?.__studioPointId || buildTrackPointId(uid, layerKey, normalizedRowIndex, timestamp)).trim();
+			if (!pointId) return null;
+			return {
+				pointId,
+				layerKey,
+				row,
+				rowIndex: normalizedRowIndex,
+				timestamp,
+				position: {
+					latitude: coord.lat,
+					longitude: coord.lon,
+				},
+				metadataField: getTrackEditMetadataFieldForLayer(layerKey),
+				metadataValue: getTrackEditMetadataFieldForLayer(layerKey)
+					? row?.[getTrackEditMetadataFieldForLayer(layerKey)]
+					: "",
+			};
+		}
+
+		function buildTrackEditPatchMap(record = getCurrentTrackEdits()) {
+			return new Map(
+				(record?.pointPatches || [])
+					.map((item) => normalizeTrackEditLocalPatch(item))
+					.filter(Boolean)
+					.map((item) => [item.pointId, item])
+			);
+		}
+
+		function applyTrackEditPatchToRow(row, patch) {
+			if (!patch) return row;
+			const nextRow = { ...row };
+			if (patch.position) {
+				const latKey = row?.__studioLatKey || inferTrackRowCoordinateKeys(row).latKey;
+				const lonKey = row?.__studioLonKey || inferTrackRowCoordinateKeys(row).lonKey;
+				if (latKey) nextRow[latKey] = patch.position.latitude;
+				if (lonKey) nextRow[lonKey] = patch.position.longitude;
+			}
+			Object.entries(patch.metadata || {}).forEach(([key, value]) => {
+				nextRow[key] = value;
+			});
+			return nextRow;
+		}
+
+		function applyTrackEditsToLayerRows(layerKey, rows, patchMap) {
+			return (rows || []).map((row, rowIndex) => {
+				const pointRef = buildTrackPointReference(currentUid, layerKey, row, rowIndex);
+				if (!pointRef) return row;
+				const patch = patchMap.get(pointRef.pointId);
+				return patch ? applyTrackEditPatchToRow(row, patch) : row;
+			});
+		}
+
+		function applyTrackEditsToDataByLayer(dataByLayer = currentBaseRawDataByLayer) {
+			const patchMap = buildTrackEditPatchMap();
+			return Object.fromEntries(
+				Object.entries(dataByLayer || {}).map(([layerKey, rows]) => [
+					layerKey,
+					isTrackEditLayerEditable(layerKey)
+						? applyTrackEditsToLayerRows(layerKey, rows || [], patchMap)
+						: (rows || []),
+				])
+			);
+		}
+
+		function rebuildTrackEditPointIndex() {
+			const nextRefsById = {};
+			const nextIdsByLayer = {};
+			Object.entries(currentRawDataByLayer || {}).forEach(([layerKey, rows]) => {
+				if (!isTrackEditLayerEditable(layerKey)) return;
+				(rows || []).forEach((row, rowIndex) => {
+					const pointRef = buildTrackPointReference(currentUid, layerKey, row, rowIndex);
+					if (!pointRef) return;
+					nextRefsById[pointRef.pointId] = pointRef;
+					(nextIdsByLayer[layerKey] ||= []).push(pointRef.pointId);
+				});
+			});
+			trackEditState.pointRefsById = nextRefsById;
+			trackEditState.pointIdsByLayer = nextIdsByLayer;
+			if (!trackEditState.anchorPointId || !nextRefsById[trackEditState.anchorPointId]) {
+				trackEditState.anchorPointId = "";
+			}
+			if (!trackEditState.lastTouchedPointId || !nextRefsById[trackEditState.lastTouchedPointId]) {
+				trackEditState.lastTouchedPointId = "";
+			}
+		}
+
+		function updateTrackEditSelectionLayerKey() {
+			const selectedLayers = [...new Set(
+				(trackEditState.selectedPointIds || [])
+					.map((pointId) => trackEditState.pointRefsById[pointId]?.layerKey || "")
+					.filter(Boolean)
+			)];
+			trackEditState.selectionLayerKey = selectedLayers.length === 1 ? selectedLayers[0] : "";
+		}
+
+		function getTrackEditSelectionPointRefs() {
+			return (trackEditState.selectedPointIds || [])
+				.map((pointId) => trackEditState.pointRefsById[pointId])
+				.filter(Boolean);
+		}
+
+		function reconcileTrackEditSelection() {
+			trackEditState.selectedPointIds = (trackEditState.selectedPointIds || [])
+				.filter((pointId) => !!trackEditState.pointRefsById[pointId]);
+			if (trackEditState.anchorPointId && !trackEditState.pointRefsById[trackEditState.anchorPointId]) {
+				trackEditState.anchorPointId = "";
+			}
+			if (!trackEditState.selectedPointIds.length) {
+				trackEditState.contextPointId = "";
+				trackEditState.contextField = "";
+				trackEditState.contextValue = "";
+			}
+			updateTrackEditSelectionLayerKey();
+		}
+
+		function setTrackEditStatus(message, tone = "idle") {
+			trackEditState.statusMessage = String(message || "").trim();
+			trackEditState.statusTone = tone || "idle";
+		}
+
+		function buildTrackEditRecordSignature(record = getCurrentTrackEdits()) {
+			return buildTrackEditPatchRenderSignature(record);
+		}
+
+		function cloneTrackEditRecord(record = getCurrentTrackEdits()) {
+			return normalizeTrackEditsLocalRecord(deepClone(record));
+		}
+
+		function markTrackEditRecordAsSaved(record = getCurrentTrackEdits()) {
+			trackEditState.savedBaselineSignature = buildTrackEditRecordSignature(record);
+			trackEditState.dirty = false;
+		}
+
+		function syncTrackEditDirtyState(record = getCurrentTrackEdits()) {
+			trackEditState.dirty = buildTrackEditRecordSignature(record) !== (trackEditState.savedBaselineSignature || "");
+		}
+
+		function resetTrackEditHistoryState(record = getCurrentTrackEdits()) {
+			trackEditState.undoStack = [];
+			trackEditState.redoStack = [];
+			markTrackEditRecordAsSaved(record);
+		}
+
+		function pushTrackEditUndoSnapshot(record = getCurrentTrackEdits()) {
+			trackEditState.undoStack.push(cloneTrackEditRecord(record));
+			if (trackEditState.undoStack.length > 60) {
+				trackEditState.undoStack.shift();
+			}
+			trackEditState.redoStack = [];
+		}
+
+		function buildTrackEditCoordinateSummary(selectionRefs) {
+			return selectionRefs
+				.slice(0, 3)
+				.map((item) => `${getLayerLabel(item.layerKey)} #${item.rowIndex + 1}: ${Number(item.position?.latitude || 0).toFixed(6)}, ${Number(item.position?.longitude || 0).toFixed(6)}`)
+				.join(" | ");
+		}
+
+		function getTrackEditEffectiveStatusText(defaultText) {
+			const dirtyText = trackEditState.dirty ? " · 有未保存修改" : "";
+			const spaceText = trackEditState.enabled && !trackEditState.spaceModifierActive
+				? " · 按住空格平移地图，滚轮/双击可缩放"
+				: trackEditState.enabled && trackEditState.spaceModifierActive
+					? " · 当前可平移地图"
+					: "";
+			return `${defaultText}${dirtyText}${spaceText}`;
+		}
+
+		function setMapHandlerEnabled(handler, nextEnabled) {
+			if (!handler) return;
+			try {
+				if (nextEnabled) handler.enable?.();
+				else handler.disable?.();
+			} catch (_) {}
+		}
+
+		function syncTrackEditMapInteractionLock() {
+			if (!map) return;
+			const mapPanningEnabled = !trackEditState.enabled || !!trackEditState.spaceModifierActive;
+			const mapZoomEnabled = !trackEditState.scrollWheelSuppressed;
+			setMapHandlerEnabled(map.dragging, mapPanningEnabled);
+			setMapHandlerEnabled(map.touchZoom, true);
+			setMapHandlerEnabled(map.doubleClickZoom, true);
+			setMapHandlerEnabled(map.scrollWheelZoom, mapZoomEnabled);
+			setMapHandlerEnabled(map.boxZoom, !trackEditState.enabled);
+			map.getContainer?.()?.classList?.toggle?.(
+				"track-edit-map-locked",
+				!!trackEditState.enabled && !trackEditState.spaceModifierActive,
+			);
+		}
+
+		function setTrackEditSpaceModifierActive(nextActive, options = {}) {
+			const effectiveValue = !!trackEditState.enabled && !!nextActive;
+			if (trackEditState.spaceModifierActive === effectiveValue) return false;
+			trackEditState.spaceModifierActive = effectiveValue;
+			syncTrackEditMapInteractionLock();
+			if (options.render !== false) renderTrackEditPanel();
+			return true;
+		}
+
+		function renderTrackEditPanel() {
+			const panel = document.getElementById("track-edit-panel");
+			const editModeButton = document.getElementById("track-edit-toggle");
+			const annotationModeButton = document.getElementById("review-mode-annotation-btn");
+			const reviewPanel = document.getElementById("review-panel");
+			const annotationPanel = document.getElementById("review-annotation-mode-panel");
+			const clearButton = document.getElementById("track-edit-clear-selection");
+			const undoButton = document.getElementById("track-edit-undo-btn");
+			const redoButton = document.getElementById("track-edit-redo-btn");
+			const saveButton = document.getElementById("track-edit-save-btn");
+			const saveOptionsButton = document.getElementById("track-edit-save-options-btn");
+			const coordinateToggle = document.getElementById("track-edit-show-coordinates");
+			const coordinateSummary = document.getElementById("track-edit-coordinate-summary");
+			const statusEl = document.getElementById("track-edit-status");
+			const selectionEl = document.getElementById("track-edit-selection");
+			if (!panel || !editModeButton || !annotationModeButton || !clearButton || !statusEl || !selectionEl) return;
+			const annotationEnabled = currentUiConfig.annotationEnabled !== false;
+			if (!trackEditState.enabled && trackEditState.saveMenuOpen) closeTrackEditSaveMenu();
+			if (!trackEditState.enabled && trackEditState.spaceModifierActive) {
+				trackEditState.spaceModifierActive = false;
+			}
+			panel.hidden = !annotationEnabled || !trackEditState.enabled;
+			if (annotationPanel) annotationPanel.hidden = !annotationEnabled || !!trackEditState.enabled;
+			if (reviewPanel) reviewPanel.dataset.mode = trackEditState.enabled ? "edit" : "review";
+			if (!annotationEnabled) return;
+			const hasReviewer = !!getCurrentReviewerId();
+			const replayReadOnly = isTimelineAnnotationReadOnly();
+			const replayLabel = getReplayTimelineSourceLabel();
+			const editableLayerCount = Object.keys(trackEditState.pointIdsByLayer || {}).length;
+			const canEnterEditMode = !!currentUid && hasReviewer && editableLayerCount > 0 && !replayReadOnly;
+			editModeButton.disabled = !currentUid || !hasReviewer || editableLayerCount <= 0 || replayReadOnly;
+			editModeButton.classList.toggle("active", !!trackEditState.enabled);
+			editModeButton.setAttribute("aria-pressed", trackEditState.enabled ? "true" : "false");
+			annotationModeButton.classList.toggle("active", !trackEditState.enabled);
+			annotationModeButton.setAttribute("aria-pressed", trackEditState.enabled ? "false" : "true");
+			clearButton.disabled = !trackEditState.selectedPointIds.length;
+			if (undoButton) undoButton.disabled = !trackEditState.undoStack.length;
+			if (redoButton) redoButton.disabled = !trackEditState.redoStack.length;
+			if (saveButton) saveButton.disabled = !currentUid || !hasReviewer || !trackEditState.dirty;
+			if (saveOptionsButton) {
+				saveOptionsButton.disabled = !currentUid || !hasReviewer;
+				saveOptionsButton.setAttribute("aria-expanded", trackEditState.saveMenuOpen ? "true" : "false");
+			}
+			if (coordinateToggle) {
+				coordinateToggle.checked = !!trackEditState.showCoordinates;
+				coordinateToggle.disabled = !trackEditState.enabled;
+			}
+			const selectionRefs = getTrackEditSelectionPointRefs();
+			if (!currentUid) {
+				selectionEl.textContent = "请先选择 UID";
+			} else if (!hasReviewer) {
+				selectionEl.textContent = "请先设置当前标注者";
+			} else if (replayReadOnly) {
+				selectionEl.textContent = replayLabel ? `当前回放 ${replayLabel} · 轨迹编辑已锁定` : "当前回放只读，轨迹编辑已锁定";
+			} else if (!editableLayerCount) {
+				selectionEl.textContent = "当前轨迹没有可编辑点图层";
+			} else if (!selectionRefs.length) {
+				selectionEl.textContent = "未选中任何点";
+			} else {
+				const layerNames = [...new Set(selectionRefs.map((item) => getLayerLabel(item.layerKey)))];
+				selectionEl.textContent = `已选 ${selectionRefs.length} 个点${layerNames.length ? ` · ${layerNames.join(" / ")}` : ""}`;
+			}
+			if (!trackEditState.statusMessage) {
+				if (!currentUid) setTrackEditStatus("请选择要编辑的轨迹", "idle");
+				else if (!hasReviewer) setTrackEditStatus("设置标注者后即可进入编辑模式", "warn");
+				else if (replayReadOnly) setTrackEditStatus(getTimelineAnnotationReadOnlyMessage(), "warn");
+				else if (!editableLayerCount) setTrackEditStatus("当前时间窗口内没有可编辑点", "warn");
+				else if (trackEditState.enabled && canEnterEditMode) setTrackEditStatus("编辑模式已开启", "active");
+				else setTrackEditStatus("编辑关闭", "idle");
+			}
+			statusEl.textContent = getTrackEditEffectiveStatusText(trackEditState.statusMessage);
+			statusEl.dataset.tone = trackEditState.statusTone || "idle";
+			if (coordinateSummary) {
+				const shouldShowCoordinates = !!trackEditState.enabled && !!trackEditState.showCoordinates && !!selectionRefs.length;
+				coordinateSummary.hidden = !shouldShowCoordinates;
+				coordinateSummary.textContent = shouldShowCoordinates
+					? buildTrackEditCoordinateSummary(selectionRefs)
+					: "";
+			}
+			syncTrackEditMapInteractionLock();
+		}
+
+		function closeTrackEditContextMenu() {
+			trackEditState.contextMenuOpen = false;
+			const menu = document.getElementById("track-edit-context-menu");
+			if (!menu) return;
+			menu.classList.remove("open");
+			menu.setAttribute("aria-hidden", "true");
+		}
+
+		function closeTrackEditSaveMenu() {
+			trackEditState.saveMenuOpen = false;
+			const menu = document.getElementById("track-edit-save-menu");
+			if (!menu) return;
+			menu.classList.remove("open");
+			menu.setAttribute("aria-hidden", "true");
+		}
+
+		function openTrackEditSaveMenu(anchorEl) {
+			const menu = document.getElementById("track-edit-save-menu");
+			if (!menu || !anchorEl) return;
+			closeTrackEditContextMenu();
+			trackEditState.saveMenuOpen = true;
+			menu.classList.add("open");
+			menu.setAttribute("aria-hidden", "false");
+			const anchorRect = anchorEl.getBoundingClientRect();
+			const menuRect = menu.getBoundingClientRect();
+			const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+			const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+			const margin = 10;
+			let left = anchorRect.right - menuRect.width;
+			let top = anchorRect.bottom + 8;
+			if (left + menuRect.width > viewportWidth - margin) left = viewportWidth - menuRect.width - margin;
+			if (left < margin) left = margin;
+			if (top + menuRect.height > viewportHeight - margin) top = anchorRect.top - menuRect.height - 8;
+			if (top < margin) top = margin;
+			menu.style.left = `${left}px`;
+			menu.style.top = `${top}px`;
+		}
+
+		function getTrackEditRangePointIds(anchorPointId, targetPointId) {
+			const anchorRef = trackEditState.pointRefsById[anchorPointId];
+			const targetRef = trackEditState.pointRefsById[targetPointId];
+			if (!anchorRef || !targetRef || anchorRef.layerKey !== targetRef.layerKey) return targetPointId ? [targetPointId] : [];
+			const layerPointIds = trackEditState.pointIdsByLayer[anchorRef.layerKey] || [];
+			const startIndex = layerPointIds.indexOf(anchorPointId);
+			const endIndex = layerPointIds.indexOf(targetPointId);
+			if (startIndex < 0 || endIndex < 0) return [targetPointId];
+			const left = Math.min(startIndex, endIndex);
+			const right = Math.max(startIndex, endIndex);
+			return layerPointIds.slice(left, right + 1);
+		}
+
+		function selectTrackEditPoint(pointId, options = {}) {
+			if (!trackEditState.enabled) return false;
+			const pointRef = trackEditState.pointRefsById[pointId];
+			if (!pointRef) return false;
+			const toggle = options.toggle === true || options.additive === true;
+			const range = options.range === true;
+			const currentSelection = (trackEditState.selectedPointIds || []).filter((candidate) => !!trackEditState.pointRefsById[candidate]);
+			let nextSelection = currentSelection;
+			const effectiveAnchor = trackEditState.anchorPointId
+				&& currentSelection.includes(trackEditState.anchorPointId)
+				&& trackEditState.pointRefsById[trackEditState.anchorPointId]
+				? trackEditState.anchorPointId
+				: (currentSelection[currentSelection.length - 1] || pointId);
+			if (range && effectiveAnchor) {
+				const rangeIds = getTrackEditRangePointIds(effectiveAnchor, pointId);
+				nextSelection = toggle
+					? dedupePreserveOrder([...currentSelection, ...rangeIds])
+					: rangeIds;
+			} else if (toggle) {
+				nextSelection = currentSelection.includes(pointId)
+					? currentSelection.filter((candidate) => candidate !== pointId)
+					: dedupePreserveOrder([...currentSelection, pointId]);
+				if (nextSelection.includes(pointId)) trackEditState.anchorPointId = pointId;
+			} else {
+				nextSelection = [pointId];
+				trackEditState.anchorPointId = pointId;
+			}
+			if (!range && !toggle) {
+				trackEditState.anchorPointId = pointId;
+			}
+			trackEditState.lastTouchedPointId = pointId;
+			trackEditState.selectedPointIds = nextSelection;
+			if (!trackEditState.selectedPointIds.includes(trackEditState.anchorPointId)) {
+				trackEditState.anchorPointId = trackEditState.selectedPointIds.includes(pointId)
+					? pointId
+					: (trackEditState.selectedPointIds[trackEditState.selectedPointIds.length - 1] || "");
+			}
+			updateTrackEditSelectionLayerKey();
+			closeTrackEditContextMenu();
+			if (options.syncTimeScrubber !== false) {
+				alignTimeScrubberToTime(pointRef.timestamp, {
+					layerKey: pointRef.layerKey,
+					keepWindow: true,
+					followView: false,
+				});
+			}
+			clearRenderedCache();
+			renderMapDisplayFromCurrentState({ exists: currentExistsByLayer, forceFit: false });
+			renderTrackEditPanel();
+			return true;
+		}
+
+		function clearTrackEditSelection(options = {}) {
+			trackEditState.selectedPointIds = [];
+			trackEditState.anchorPointId = "";
+			trackEditState.lastTouchedPointId = "";
+			trackEditState.selectionLayerKey = "";
+			if (options.closeMenu !== false) closeTrackEditContextMenu();
+			if (options.render !== false) {
+				clearRenderedCache();
+				renderMapDisplayFromCurrentState({ exists: currentExistsByLayer, forceFit: false });
+				renderTrackEditPanel();
+			}
+		}
+
+		function clearTrackEditInteractionState(options = {}) {
+			trackEditState.enabled = false;
+			trackEditState.dragging = false;
+			trackEditState.dragPointId = "";
+			trackEditState.dragOriginDisplayLat = null;
+			trackEditState.dragOriginDisplayLon = null;
+			trackEditState.dragSnapshot = [];
+			trackEditState.dragSuppressClickUntil = 0;
+			trackEditState.spaceModifierActive = false;
+			clearTrackEditSelection({ render: false, closeMenu: false });
+			closeTrackEditContextMenu();
+			closeTrackEditSaveMenu();
+			if (options.resetHistory === true) {
+				trackEditState.undoStack = [];
+				trackEditState.redoStack = [];
+				trackEditState.dirty = false;
+				trackEditState.savedBaselineSignature = "";
+			}
+			if (options.resetStatus !== false) {
+				setTrackEditStatus(options.statusMessage || "编辑关闭", options.statusTone || "idle");
+			}
+			syncTrackEditMapInteractionLock();
+			if (options.render === true) {
+				clearRenderedCache();
+				renderMapDisplayFromCurrentState({ exists: currentExistsByLayer, forceFit: false });
+				renderTrackEditPanel();
+			}
+		}
+
+		function getTrackEditContextConfig() {
+			const selectionRefs = getTrackEditSelectionPointRefs();
+			if (!selectionRefs.length) {
+				return {
+					enabled: false,
+					title: "批量修改轨迹点",
+					subtitle: "当前未选中点",
+					fieldLabel: "标签字段",
+					options: [],
+					value: "",
+					reason: "请先选中要修改的轨迹点",
+				};
+			}
+			const layerKeys = [...new Set(selectionRefs.map((item) => item.layerKey))];
+			if (layerKeys.length !== 1) {
+				return {
+					enabled: false,
+					title: "批量修改轨迹点",
+					subtitle: `已选 ${selectionRefs.length} 个点`,
+					fieldLabel: "标签字段",
+					options: [],
+					value: "",
+					reason: "批量改标签目前只支持同一图层的选点",
+				};
+			}
+			const layerKey = layerKeys[0];
+			const field = getTrackEditMetadataFieldForLayer(layerKey);
+			const options = getTrackEditMetadataOptionsForLayer(layerKey);
+			if (!field || !options.length) {
+				return {
+					enabled: false,
+					title: `${getLayerLabel(layerKey)} 批量编辑`,
+					subtitle: `已选 ${selectionRefs.length} 个点`,
+					fieldLabel: "标签字段",
+					options: [],
+					value: "",
+					reason: "当前图层暂时只支持位置编辑",
+				};
+			}
+			const uniqueValues = dedupePreserveOrder(selectionRefs.map((item) => String(item.row?.[field] || "").trim()));
+			const hasMixedValue = uniqueValues.length > 1;
+			const currentValue = hasMixedValue ? "" : String(trackEditState.contextValue || selectionRefs[0].row?.[field] || "").trim();
+			return {
+				enabled: true,
+				layerKey,
+				field,
+				title: `${getLayerLabel(layerKey)} 批量编辑`,
+				subtitle: hasMixedValue
+					? `已选 ${selectionRefs.length} 个点 · ${field} 当前值不一致`
+					: `已选 ${selectionRefs.length} 个点 · 修改 ${field}`,
+				fieldLabel: field,
+				options,
+				value: options.includes(currentValue) ? currentValue : "",
+				mixedValue: hasMixedValue,
+				placeholderLabel: hasMixedValue ? `当前选中 ${field} 不一致，请选择新的统一值` : "",
+				reason: "",
+			};
+		}
+
+		function renderTrackEditContextMenu() {
+			const titleEl = document.getElementById("track-edit-context-title");
+			const subtitleEl = document.getElementById("track-edit-context-subtitle");
+			const fieldLabelEl = document.getElementById("track-edit-context-field-label");
+			const valueSelect = document.getElementById("track-edit-context-value");
+			const applyButton = document.getElementById("track-edit-context-apply");
+			if (!titleEl || !subtitleEl || !fieldLabelEl || !valueSelect || !applyButton) return;
+			const config = getTrackEditContextConfig();
+			titleEl.textContent = config.title;
+			subtitleEl.textContent = config.enabled
+				? config.subtitle
+				: config.reason || config.subtitle;
+			fieldLabelEl.textContent = config.fieldLabel;
+			const optionMarkup = [];
+			if (config.enabled && config.mixedValue) {
+				optionMarkup.push(`<option value="" disabled selected>${escapeHtml(config.placeholderLabel || "当前值不一致，请选择新的统一值")}</option>`);
+			}
+			optionMarkup.push(...config.options.map((option) => `
+				<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>
+			`));
+			valueSelect.innerHTML = optionMarkup.join("");
+			valueSelect.disabled = !config.enabled;
+			applyButton.disabled = !config.enabled || !config.value;
+			if (config.enabled) {
+				valueSelect.value = config.value;
+				trackEditState.contextField = config.field;
+				trackEditState.contextValue = config.value;
+			} else {
+				trackEditState.contextField = "";
+				trackEditState.contextValue = "";
+			}
+		}
+
+		function openTrackEditContextMenu(clientX, clientY, pointId = "") {
+			const menu = document.getElementById("track-edit-context-menu");
+			if (!menu) return;
+			closeTrackEditSaveMenu();
+			if (pointId) trackEditState.contextPointId = pointId;
+			trackEditState.contextMenuOpen = true;
+			renderTrackEditContextMenu();
+			menu.classList.add("open");
+			menu.setAttribute("aria-hidden", "false");
+			const menuRect = menu.getBoundingClientRect();
+			const margin = 10;
+			const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+			const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+			let left = clientX + 10;
+			let top = clientY + 10;
+			if (clientX + 10 + menuRect.width > viewportWidth - margin) left = clientX - menuRect.width - 10;
+			if (clientY + 10 + menuRect.height > viewportHeight - margin) top = clientY - menuRect.height - 10;
+			left = Math.max(margin, Math.min(viewportWidth - menuRect.width - margin, left));
+			top = Math.max(margin, Math.min(viewportHeight - menuRect.height - margin, top));
+			menu.style.left = `${left}px`;
+			menu.style.top = `${top}px`;
+		}
+
+		function buildTrackEditPatchFromRef(pointRef, payload = {}) {
+			if (!pointRef) return null;
+			const patch = {
+				pointId: pointRef.pointId,
+				layerKey: pointRef.layerKey,
+				rowIndex: pointRef.rowIndex,
+				timestamp: pointRef.timestamp,
+			};
+			if (payload.position) patch.position = payload.position;
+			if (payload.metadata) patch.metadata = payload.metadata;
+			return normalizeTrackEditLocalPatch(patch);
+		}
+
+		async function persistCurrentTrackEditsToServer(record = getCurrentTrackEdits(), context = {}) {
+			const scopedContext = buildReviewerScopedContext({
+				...context,
+				uid: record?.uid || record?.sample_id || context.uid,
+				reviewerId: record?.reviewer_id || record?.reviewerId || context.reviewerId,
+				reviewerName: record?.reviewer_name || record?.reviewerName || record?.reviewer || context.reviewerName,
+			});
+			if (!scopedContext.uid || !scopedContext.reviewerId || isReplayTimelineActiveForContext(scopedContext)) return null;
+			const storeKey = getCurrentTrackEditStoreKey(scopedContext);
+			const requestSequence = ++trackEditPersistRequestSequence;
+			latestTrackEditPersistRequestByStoreKey[storeKey] = requestSequence;
+			try {
+				const response = await fetch(buildTrackEditsApiUrl({}, scopedContext), {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						uid: scopedContext.uid,
+						sample_id: scopedContext.uid,
+						reviewer_id: scopedContext.reviewerId,
+						reviewer_name: scopedContext.reviewerName,
+						patches: record.pointPatches || [],
+						pointPatches: record.pointPatches || [],
+						overwrite: context.overwrite === true,
+					}),
+				});
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				const payload = await response.json();
+				const nextRecord = normalizeTrackEditsLocalRecord(
+					payload.track_edits || payload.trackEdits || payload.trackEditsRecord || record,
+					scopedContext,
+				);
+				if (latestTrackEditPersistRequestByStoreKey[storeKey] !== requestSequence) return nextRecord;
+				setCurrentTrackEditsRecord(nextRecord, scopedContext);
+				if (!isReviewerScopedContextCurrent(scopedContext)) return nextRecord;
+				trackEditState.lastSavedAt = nextRecord.updated_at || "";
+				markTrackEditRecordAsSaved(nextRecord);
+				setTrackEditStatus(
+					String(context.successMessage || "").trim() || `已保存 ${nextRecord.pointPatches.length} 个轨迹点修正`,
+					"active",
+				);
+				renderTrackEditPanel();
+				return nextRecord;
+			} catch (error) {
+				if (latestTrackEditPersistRequestByStoreKey[storeKey] !== requestSequence) return null;
+				if (!isReviewerScopedContextCurrent(scopedContext)) return null;
+				setTrackEditStatus(
+					String(context.failureMessage || "").trim() || `轨迹修正保存失败：${error?.message || error}`,
+					"error",
+				);
+				renderTrackEditPanel();
+				return null;
+			}
+		}
+
+		function applyCurrentTrackEditsToCurrentData(options = {}) {
+			const nextRawDataByLayer = applyTrackEditsToDataByLayer(currentBaseRawDataByLayer);
+			const nextFilteredDataByLayer = Object.fromEntries(
+				Object.entries(nextRawDataByLayer || {}).map(([layerKey, rows]) => [
+					layerKey,
+					filterRowsByCurrentTimeWindow(rows || []),
+				])
+			);
+			currentRawDataByLayer = nextRawDataByLayer;
+			currentFilteredDataByLayer = nextFilteredDataByLayer;
+			rebuildTrackEditPointIndex();
+			reconcileTrackEditSelection();
+			if (options.syncTimeScrubber !== false) {
+				syncTimeScrubberFromCurrentData({
+					preserveTime: options.preserveScrubberTime !== false,
+					resetVisibleRange: options.resetVisibleRange === true,
+				});
+			}
+			clearRenderedCache();
+			renderMapDisplayFromCurrentState({
+				exists: currentExistsByLayer,
+				forceFit: !!options.forceFit,
+			});
+			renderTrackEditPanel();
+		}
+
+		function upsertCurrentTrackEditPatches(patches, options = {}) {
+			if (!currentUid || !getCurrentReviewerId() || isTimelineAnnotationReadOnly()) return false;
+			const normalizedPatches = (patches || [])
+				.map((item) => normalizeTrackEditLocalPatch(item))
+				.filter(Boolean);
+			if (!normalizedPatches.length) return false;
+			const currentRecord = getCurrentTrackEdits();
+			const patchMap = buildTrackEditPatchMap(currentRecord);
+			normalizedPatches.forEach((patch) => {
+				const mergedPatch = mergeTrackEditLocalPatch(patchMap.get(patch.pointId), patch);
+				const compactedPatch = compactTrackEditPatchAgainstBase(mergedPatch);
+				if (compactedPatch) patchMap.set(compactedPatch.pointId, compactedPatch);
+				else patchMap.delete(patch.pointId);
+			});
+			const nextRecord = normalizeTrackEditsLocalRecord({
+				...currentRecord,
+				uid: currentUid,
+				sample_id: currentUid,
+				reviewer_id: getCurrentReviewerId(),
+				reviewer_name: getCurrentReviewerName(),
+				reviewer: getCurrentReviewerName(),
+				updated_at: new Date().toISOString(),
+				pointPatches: buildSortedTrackEditPatches([...patchMap.values()]),
+			});
+			if (buildTrackEditRecordSignature(nextRecord) === buildTrackEditRecordSignature(currentRecord)) {
+				return false;
+			}
+			pushTrackEditUndoSnapshot(currentRecord);
+			setCurrentTrackEditsRecord(nextRecord);
+			syncTrackEditDirtyState(nextRecord);
+			setTrackEditStatus(
+				String(options.statusMessage || "").trim() || `已更新 ${normalizedPatches.length} 个轨迹点，待保存`,
+				options.statusTone || "warn",
+			);
+			applyCurrentTrackEditsToCurrentData({
+				preserveScrubberTime: options.preserveScrubberTime !== false,
+				forceFit: !!options.forceFit,
+			});
+			if (options.persist === true) {
+				void persistCurrentTrackEditsToServer(nextRecord, options.persistContext || {});
+			}
+			return true;
+		}
+
+		async function loadTrackEditsForUid(uid, context = {}) {
+			const scopedContext = buildReviewerScopedContext({
+				...context,
+				uid,
+			});
+			if (!scopedContext.uid) {
+				return buildEmptyTrackEdits(scopedContext.uid, scopedContext.reviewerId, scopedContext.reviewerName);
+			}
+			const storeKey = getCurrentTrackEditStoreKey(scopedContext);
+			const requestSequence = ++trackEditLoadRequestSequence;
+			latestTrackEditLoadRequestByStoreKey[storeKey] = requestSequence;
+			if (currentUiConfig.annotationEnabled === false || !scopedContext.reviewerId) {
+				const empty = buildEmptyTrackEdits(scopedContext.uid, scopedContext.reviewerId, scopedContext.reviewerName);
+				setCurrentTrackEditsRecord(empty, scopedContext);
+				if (isReviewerScopedContextCurrent(scopedContext)) {
+					trackEditState.lastSavedAt = "";
+					resetTrackEditHistoryState(empty);
+					trackEditState.spaceModifierActive = false;
+					closeTrackEditSaveMenu();
+				}
+				return empty;
+			}
+			let nextRecord;
+			try {
+				const response = await fetch(buildTrackEditsApiUrl({ uid: scopedContext.uid }, scopedContext));
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				const payload = await response.json();
+				nextRecord = normalizeTrackEditsLocalRecord(
+					payload.track_edits || payload.trackEdits || payload.trackEditsRecord || {},
+					scopedContext,
+				);
+			} catch (_) {
+				nextRecord = normalizeTrackEditsLocalRecord(
+					trackEditsByTrack[storeKey] || buildEmptyTrackEdits(scopedContext.uid, scopedContext.reviewerId, scopedContext.reviewerName),
+					scopedContext,
+				);
+			}
+			if (latestTrackEditLoadRequestByStoreKey[storeKey] !== requestSequence) return nextRecord;
+			setCurrentTrackEditsRecord(nextRecord, scopedContext);
+			if (isReviewerScopedContextCurrent(scopedContext)) {
+				trackEditState.lastSavedAt = nextRecord.updated_at || "";
+				resetTrackEditHistoryState(nextRecord);
+				trackEditState.spaceModifierActive = false;
+				closeTrackEditSaveMenu();
+			}
+			return nextRecord;
+		}
+
+		function undoTrackEditChange() {
+			if (!trackEditState.undoStack.length) return false;
+			const currentRecord = cloneTrackEditRecord(getCurrentTrackEdits());
+			const previousRecord = cloneTrackEditRecord(trackEditState.undoStack.pop());
+			trackEditState.redoStack.push(currentRecord);
+			if (trackEditState.redoStack.length > 60) {
+				trackEditState.redoStack.shift();
+			}
+			setCurrentTrackEditsRecord(previousRecord);
+			syncTrackEditDirtyState(previousRecord);
+			closeTrackEditSaveMenu();
+			setTrackEditStatus("已撤销最近一次编辑", "active");
+			applyCurrentTrackEditsToCurrentData({
+				preserveScrubberTime: true,
+				forceFit: false,
+			});
+			return true;
+		}
+
+		function redoTrackEditChange() {
+			if (!trackEditState.redoStack.length) return false;
+			const currentRecord = cloneTrackEditRecord(getCurrentTrackEdits());
+			const nextRecord = cloneTrackEditRecord(trackEditState.redoStack.pop());
+			trackEditState.undoStack.push(currentRecord);
+			if (trackEditState.undoStack.length > 60) {
+				trackEditState.undoStack.shift();
+			}
+			setCurrentTrackEditsRecord(nextRecord);
+			syncTrackEditDirtyState(nextRecord);
+			closeTrackEditSaveMenu();
+			setTrackEditStatus("已恢复最近一次编辑", "active");
+			applyCurrentTrackEditsToCurrentData({
+				preserveScrubberTime: true,
+				forceFit: false,
+			});
+			return true;
+		}
+
+		async function saveCurrentTrackEdits(options = {}) {
+			if (!currentUid) {
+				setTrackEditStatus("请先选择要编辑的轨迹", "warn");
+				renderTrackEditPanel();
+				return null;
+			}
+			if (isTimelineAnnotationReadOnly()) {
+				setTrackEditStatus(getTimelineAnnotationReadOnlyMessage(), "warn");
+				renderTrackEditPanel();
+				return null;
+			}
+			if (!ensureAnnotationSessionReady({ prompt: true })) {
+				renderTrackEditPanel();
+				return null;
+			}
+			const overwrite = options.overwrite === true;
+			const currentRecord = getCurrentTrackEdits();
+			closeTrackEditSaveMenu();
+			if (!trackEditState.dirty && !overwrite) {
+				setTrackEditStatus("当前轨迹修正已是最新，无需重复保存", "idle");
+				renderTrackEditPanel();
+				return currentRecord;
+			}
+			setTrackEditStatus(overwrite ? "正在覆盖当前轨迹修正..." : "正在保存轨迹修正...", "active");
+			renderTrackEditPanel();
+			return persistCurrentTrackEditsToServer(currentRecord, {
+				overwrite,
+				successMessage: overwrite
+					? `已覆盖当前轨迹修正（${currentRecord.pointPatches.length} 个点）`
+					: `已保存 ${currentRecord.pointPatches.length} 个轨迹点修正`,
+			});
+		}
+
+		function downloadCurrentTrackEditsAsJson() {
+			if (!currentUid) {
+				setTrackEditStatus("请先选择要导出的轨迹", "warn");
+				renderTrackEditPanel();
+				return null;
+			}
+			if (!ensureAnnotationSessionReady({ prompt: true })) {
+				renderTrackEditPanel();
+				return null;
+			}
+			const currentRecord = getCurrentTrackEdits();
+			const payload = {
+				...currentRecord,
+				patches: currentRecord.pointPatches || [],
+				batch_name: currentBatchName || "",
+				store_key: getCurrentTrackEditStoreKey(),
+				exported_at: new Date().toISOString(),
+			};
+			const filename = [
+				currentUid || "track",
+				getCurrentReviewerId() || "reviewer",
+				"track-edits",
+			].join("_") + ".json";
+			const downloadUrl = `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(payload, null, 2))}`;
+			const anchor = document.createElement ? document.createElement("a") : null;
+			if (anchor) {
+				anchor.href = downloadUrl;
+				anchor.download = filename;
+				anchor.rel = "noopener";
+				anchor.style.display = "none";
+				document.body?.appendChild?.(anchor);
+				anchor.click?.();
+				anchor.remove?.();
+			} else if (typeof location !== "undefined") {
+				location.href = downloadUrl;
+			}
+			window.__lastTrackEditDownloadUrl = downloadUrl;
+			window.__lastTrackEditDownloadFilename = filename;
+			closeTrackEditSaveMenu();
+			setTrackEditStatus(`已准备导出 ${filename}`, "active");
+			renderTrackEditPanel();
+			return payload;
+		}
+
+		function setTrackEditModeEnabled(nextEnabled) {
+			if (nextEnabled) {
+				if (isTimelineAnnotationReadOnly()) {
+					setTrackEditStatus(getTimelineAnnotationReadOnlyMessage(), "warn");
+					renderTrackEditPanel();
+					return false;
+				}
+				if (!ensureAnnotationSessionReady({ prompt: true })) return false;
+				if (!currentUid) {
+					setTrackEditStatus("请先选择要编辑的轨迹", "warn");
+					renderTrackEditPanel();
+					return false;
+				}
+				if (!Object.keys(trackEditState.pointIdsByLayer || {}).length) {
+					setTrackEditStatus("当前时间窗口内没有可编辑点", "warn");
+					renderTrackEditPanel();
+					return false;
+				}
+				trackEditState.enabled = true;
+				trackEditState.spaceModifierActive = false;
+				setTrackEditStatus(
+					trackEditState.dirty ? "编辑模式已开启，当前有未保存修改" : "编辑模式已开启",
+					trackEditState.dirty ? "warn" : "active",
+				);
+			} else {
+				clearTrackEditInteractionState({
+					resetStatus: true,
+					statusMessage: trackEditState.dirty ? "已退出编辑模式，修改仍未保存" : "编辑关闭",
+					statusTone: trackEditState.dirty ? "warn" : "idle",
+				});
+			}
+			clearRenderedCache();
+			renderMapDisplayFromCurrentState({ exists: currentExistsByLayer, forceFit: false });
+			renderTrackEditPanel();
+			return true;
+		}
+
+		function toggleTrackEditMode() {
+			return setTrackEditModeEnabled(!trackEditState.enabled);
+		}
+
+		function beginTrackEditMarkerDrag(pointId, marker) {
+			if (!trackEditState.enabled || !marker) return;
+			if (!trackEditState.selectedPointIds.includes(pointId)) {
+				trackEditState.selectedPointIds = [pointId];
+				trackEditState.anchorPointId = pointId;
+				trackEditState.lastTouchedPointId = pointId;
+				updateTrackEditSelectionLayerKey();
+				const pointRef = trackEditState.pointRefsById[pointId];
+				if (pointRef) {
+					alignTimeScrubberToTime(pointRef.timestamp, {
+						layerKey: pointRef.layerKey,
+						keepWindow: true,
+						followView: false,
+					});
+				}
+				renderTrackEditPanel();
+			}
+			const dragMarker = marker;
+			const dragLatLng = dragMarker.getLatLng?.();
+			if (!dragLatLng) return;
+			const dragSnapshot = getTrackEditSelectionPointRefs()
+				.map((pointRef) => {
+					const targetMarker = pointRef.pointId === pointId
+						? dragMarker
+						: trackEditState.renderedMarkersByPointId[pointRef.pointId];
+					const markerLatLng = targetMarker?.getLatLng?.();
+					if (!targetMarker || !markerLatLng) return null;
+					return {
+						pointId: pointRef.pointId,
+						marker: targetMarker,
+						displayLat: markerLatLng.lat,
+						displayLon: markerLatLng.lng,
+					};
+				})
+				.filter(Boolean);
+			if (!dragSnapshot.length) return;
+			trackEditState.dragging = true;
+			trackEditState.dragPointId = pointId;
+			trackEditState.dragOriginDisplayLat = dragLatLng.lat;
+			trackEditState.dragOriginDisplayLon = dragLatLng.lng;
+			trackEditState.dragSnapshot = dragSnapshot;
+			closeTrackEditContextMenu();
+			setTrackEditStatus(`正在拖动 ${dragSnapshot.length} 个点`, "active");
+			renderTrackEditPanel();
+		}
+
+		function updateTrackEditMarkerDrag(pointId, marker) {
+			if (!trackEditState.dragging || trackEditState.dragPointId !== pointId || !marker) return;
+			const currentLatLng = marker.getLatLng?.();
+			if (!currentLatLng) return;
+			const deltaLat = currentLatLng.lat - (trackEditState.dragOriginDisplayLat ?? currentLatLng.lat);
+			const deltaLon = currentLatLng.lng - (trackEditState.dragOriginDisplayLon ?? currentLatLng.lng);
+			(trackEditState.dragSnapshot || []).forEach((item) => {
+				if (item.pointId === pointId) return;
+				item.marker?.setLatLng?.([item.displayLat + deltaLat, item.displayLon + deltaLon]);
+			});
+		}
+
+		function commitTrackEditMarkerDrag(pointId, marker) {
+			if (!trackEditState.dragging || trackEditState.dragPointId !== pointId || !marker) return;
+			const currentLatLng = marker.getLatLng?.();
+			const originLat = trackEditState.dragOriginDisplayLat;
+			const originLon = trackEditState.dragOriginDisplayLon;
+			const snapshot = [...(trackEditState.dragSnapshot || [])];
+			trackEditState.dragging = false;
+			trackEditState.dragPointId = "";
+			trackEditState.dragOriginDisplayLat = null;
+			trackEditState.dragOriginDisplayLon = null;
+			trackEditState.dragSnapshot = [];
+			trackEditState.dragSuppressClickUntil = Date.now() + 220;
+			if (!currentLatLng || originLat == null || originLon == null || !snapshot.length) {
+				setTrackEditStatus("拖动已取消", "warn");
+				renderTrackEditPanel();
+				return;
+			}
+			const deltaLat = currentLatLng.lat - originLat;
+			const deltaLon = currentLatLng.lng - originLon;
+			const patches = snapshot.map((item) => {
+				const pointRef = trackEditState.pointRefsById[item.pointId];
+				if (!pointRef) return null;
+				const [latitude, longitude] = convertLatLonBetweenTileSystems(
+					item.displayLat + deltaLat,
+					item.displayLon + deltaLon,
+					getMapTileCoordinateSystem(),
+					"wgs84"
+				);
+				return buildTrackEditPatchFromRef(pointRef, {
+					position: { latitude, longitude },
+				});
+			}).filter(Boolean);
+			if (!patches.length) {
+				setTrackEditStatus("拖动已取消", "warn");
+				renderTrackEditPanel();
+				return;
+			}
+			upsertCurrentTrackEditPatches(patches, {
+				statusMessage: `已更新 ${patches.length} 个点的位置，待保存`,
+				statusTone: "warn",
+				preserveScrubberTime: true,
+			});
+		}
+
+		function applyTrackEditMetadataPatch(value) {
+			const config = getTrackEditContextConfig();
+			if (!config.enabled || !config.field) return false;
+			const normalizedValue = String(value || "").trim();
+			if (!normalizedValue) return false;
+			const patches = getTrackEditSelectionPointRefs()
+				.map((pointRef) => buildTrackEditPatchFromRef(pointRef, {
+					metadata: {
+						[config.field]: normalizedValue,
+					},
+				}))
+				.filter(Boolean);
+			if (!patches.length) return false;
+			closeTrackEditContextMenu();
+			upsertCurrentTrackEditPatches(patches, {
+				statusMessage: `已批量更新 ${patches.length} 个点的 ${config.field}，待保存`,
+				statusTone: "warn",
+				preserveScrubberTime: true,
+			});
+			return true;
+		}
+
 		function setTimeScrubberActive(nextActive) {
 			document.getElementById("time-scrubber-control").classList.toggle("active", !!nextActive);
 		}
@@ -1592,30 +3154,143 @@
 			return `<div class="time-focus-bubble" style="--focus-color:${escapeHtml(color)}"><span>${escapeHtml(layerText)}</span></div>`;
 		}
 
-		function getCurrentTimelinePinStoreKey() {
-			return `${currentBatchName || "__default__"}::${getCurrentReviewerId() || "__no_reviewer__"}::${currentUid || "__none__"}`;
+		function getCurrentTimelinePinStoreKey(context = {}) {
+			return buildReviewerScopedStoreKey(context);
 		}
 
-		function getCurrentTimelinePins() {
-			if (currentUiConfig.annotationEnabled === false || !currentUid || !getCurrentReviewerId()) return [];
-			return timelinePinsByTrack[getCurrentTimelinePinStoreKey()] || [];
+		function getCurrentTimelinePins(context = {}) {
+			const scopedContext = buildReviewerScopedContext(context);
+			if (currentUiConfig.annotationEnabled === false || !scopedContext.uid || !scopedContext.reviewerId) return [];
+			return timelinePinsByTrack[getCurrentTimelinePinStoreKey(scopedContext)] || [];
 		}
 
 		function saveCurrentTimelinePins(pins) {
-			if (currentUiConfig.annotationEnabled === false || !currentUid || !getCurrentReviewerId()) return;
+			if (currentUiConfig.annotationEnabled === false || !currentUid || !getCurrentReviewerId() || isTimelineAnnotationReadOnly()) return;
 			timelinePinsByTrack[getCurrentTimelinePinStoreKey()] = Array.isArray(pins) ? pins : [];
 			persistTimelineAnnotationStore(TIMELINE_PINS_STORAGE_KEY, timelinePinsByTrack);
 			void persistCurrentTimelineAnnotationsToServer();
 		}
 
-		function getCurrentTimelineSegments() {
-			if (currentUiConfig.annotationEnabled === false || !currentUid || !getCurrentReviewerId()) return [];
-			return timelineSegmentsByTrack[getCurrentTimelinePinStoreKey()] || [];
+		function getCurrentTimelineSegments(context = {}) {
+			const scopedContext = buildReviewerScopedContext(context);
+			if (currentUiConfig.annotationEnabled === false || !scopedContext.uid || !scopedContext.reviewerId) return [];
+			return timelineSegmentsByTrack[getCurrentTimelinePinStoreKey(scopedContext)] || [];
+		}
+
+		function isExclusiveTimelineSegmentModeEnabled() {
+			if (isReplayTimelineActiveForContext()) {
+				return !!replayTimelineState.segmentPolicy?.exclusiveMode;
+			}
+			return !!annotationSettings.exclusiveSegments;
+		}
+
+		function buildTimelineSegmentPolicyPayload() {
+			return {
+				exclusiveMode: isExclusiveTimelineSegmentModeEnabled(),
+				intervalSemantics: isExclusiveTimelineSegmentModeEnabled()
+					? "left_open_right_closed"
+					: "closed_interval",
+			};
+		}
+
+		function buildTimelineSegmentId(categoryId, startTime, endTime, fallbackId = "") {
+			const normalizedCategoryId = String(categoryId || "").trim() || "segment";
+			const leftTime = Math.round(Math.min(startTime, endTime));
+			const rightTime = Math.round(Math.max(startTime, endTime));
+			return fallbackId || `${normalizedCategoryId}:${leftTime}:${rightTime}`;
+		}
+
+		function buildNormalizedTimelineSegment(segment, startTime, endTime, options = {}) {
+			const leftTime = Math.min(startTime, endTime);
+			const rightTime = Math.max(startTime, endTime);
+			if (!(rightTime > leftTime)) return null;
+			return {
+				...segment,
+				startTime: leftTime,
+				endTime: rightTime,
+				id: buildTimelineSegmentId(
+					options.categoryId ?? segment?.categoryId,
+					leftTime,
+					rightTime,
+					options.preserveId === true ? String(segment?.id || "").trim() : ""
+				),
+			};
+		}
+
+		function normalizeExclusiveTimelineSegments(segments = []) {
+			const normalized = [];
+			(segments || []).forEach((segment) => {
+				if (!segment || typeof segment !== "object") return;
+				const startTime = parseNumericValue(segment.startTime);
+				const endTime = parseNumericValue(segment.endTime);
+				if (startTime == null || endTime == null) return;
+				let candidate = buildNormalizedTimelineSegment(segment, startTime, endTime);
+				if (!candidate) return;
+				for (const existingSegment of normalized) {
+					if (existingSegment.startTime < candidate.startTime && candidate.startTime < existingSegment.endTime) {
+						candidate = buildNormalizedTimelineSegment(
+							candidate,
+							existingSegment.endTime,
+							candidate.endTime,
+							{ categoryId: candidate.categoryId }
+						);
+						break;
+					}
+				}
+				if (!candidate) return;
+				const trimmedExisting = [];
+				normalized.forEach((existingSegment) => {
+					if (existingSegment.endTime <= candidate.startTime || existingSegment.startTime >= candidate.endTime) {
+						trimmedExisting.push(existingSegment);
+						return;
+					}
+					if (existingSegment.startTime < candidate.startTime) {
+						const leftRemainder = buildNormalizedTimelineSegment(
+							existingSegment,
+							existingSegment.startTime,
+							candidate.startTime
+						);
+						if (leftRemainder) trimmedExisting.push(leftRemainder);
+					}
+					if (existingSegment.endTime > candidate.endTime) {
+						const rightRemainder = buildNormalizedTimelineSegment(
+							existingSegment,
+							candidate.endTime,
+							existingSegment.endTime
+						);
+						if (rightRemainder) trimmedExisting.push(rightRemainder);
+					}
+				});
+				trimmedExisting.push(candidate);
+				normalized.length = 0;
+				trimmedExisting
+					.sort((a, b) => (a.startTime - b.startTime) || (a.endTime - b.endTime) || String(a.categoryId || "").localeCompare(String(b.categoryId || "")))
+					.forEach((item) => normalized.push(item));
+			});
+			return normalized;
+		}
+
+		function snapTimelineSegmentStartForExclusiveMode(segments, startTime, endTime) {
+			const leftTime = Math.min(startTime, endTime);
+			const rightTime = Math.max(startTime, endTime);
+			const containingSegment = (segments || []).find((segment) =>
+				leftTime > segment.startTime && leftTime < segment.endTime
+			);
+			if (!containingSegment) {
+				return { startTime: leftTime, endTime: rightTime };
+			}
+			return {
+				startTime: containingSegment.endTime,
+				endTime: rightTime,
+			};
 		}
 
 		function saveCurrentTimelineSegments(segments) {
-			if (currentUiConfig.annotationEnabled === false || !currentUid || !getCurrentReviewerId()) return;
-			timelineSegmentsByTrack[getCurrentTimelinePinStoreKey()] = Array.isArray(segments) ? segments : [];
+			if (currentUiConfig.annotationEnabled === false || !currentUid || !getCurrentReviewerId() || isTimelineAnnotationReadOnly()) return;
+			const nextSegments = Array.isArray(segments) ? segments : [];
+			timelineSegmentsByTrack[getCurrentTimelinePinStoreKey()] = isExclusiveTimelineSegmentModeEnabled()
+				? normalizeExclusiveTimelineSegments(nextSegments)
+				: nextSegments;
 			persistTimelineAnnotationStore(TIMELINE_SEGMENTS_STORAGE_KEY, timelineSegmentsByTrack);
 			void persistCurrentTimelineAnnotationsToServer();
 		}
@@ -1644,7 +3319,7 @@
 		}
 
 		function startTimelineSegmentDraft(categoryId, pointIndex) {
-			if (!ensureAnnotationSessionReady({ prompt: true })) return;
+			if (!ensureTimelineAnnotationsWritable({ prompt: true })) return;
 			const point = (timeScrubberState.allPoints || [])[Math.max(0, Math.min((timeScrubberState.allPoints || []).length - 1, pointIndex ?? timeScrubberState.selectedIndex ?? 0))];
 			if (!point || !getAnnotationCategoryById(categoryId)) return;
 			segmentDraftState = {
@@ -1671,7 +3346,7 @@
 
 		function commitTimelineSegmentDraft(pointIndex) {
 			if (!segmentDraftState.active) return;
-			if (!ensureAnnotationSessionReady({ prompt: false })) {
+			if (!ensureTimelineAnnotationsWritable({ prompt: false, render: false })) {
 				cancelTimelineSegmentDraft({ silent: true });
 				return;
 			}
@@ -1689,23 +3364,32 @@
 			}
 			const leftTime = Math.min(startTime, endTime);
 			const rightTime = Math.max(startTime, endTime);
-			const id = `${category.id}:${Math.round(leftTime)}:${Math.round(rightTime)}`;
 			const existing = getCurrentTimelineSegments();
-			if (!existing.some(item => item.id === id)) {
-				saveCurrentTimelineSegments([
-					...existing,
-					{
-						id,
-						categoryId: category.id,
-						categoryName: category.name,
-						color: category.color,
-						startTime: leftTime,
-						endTime: rightTime,
-						entryMode: "manual",
-						segmentScope: "custom",
-						sourceLayerKey: timeScrubberState.selectedLayer || "",
-					},
-				]);
+			const snappedBounds = isExclusiveTimelineSegmentModeEnabled()
+				? snapTimelineSegmentStartForExclusiveMode(existing, leftTime, rightTime)
+				: { startTime: leftTime, endTime: rightTime };
+			const nextSegment = buildNormalizedTimelineSegment(
+				{
+					categoryId: category.id,
+					categoryName: category.name,
+					color: category.color,
+					entryMode: "manual",
+					segmentScope: "custom",
+					sourceLayerKey: timeScrubberState.selectedLayer || "",
+				},
+				snappedBounds.startTime,
+				snappedBounds.endTime,
+				{ categoryId: category.id }
+			);
+			if (nextSegment) {
+				if (isExclusiveTimelineSegmentModeEnabled()) {
+					saveCurrentTimelineSegments([...existing, nextSegment]);
+				} else if (!existing.some(item => item.id === nextSegment.id)) {
+					saveCurrentTimelineSegments([
+						...existing,
+						nextSegment,
+					]);
+				}
 				autoSelectAcceptDecisionAfterAnnotation();
 			}
 			resetSegmentDraftState();
@@ -1713,7 +3397,7 @@
 		}
 
 		function getRenderableTimelineSegments(options = {}) {
-			const entries = getCurrentTimelineSegments().map(segment => ({
+			const entries = getActiveTimelineSegmentsForDisplay().map(segment => ({
 				...segment,
 				isDraft: false,
 			}));
@@ -1741,62 +3425,99 @@
 				if (laneIndex === -1) {
 					return { ...segment, laneIndex: -1, renderMode: "cover" };
 				}
-				laneEnds[laneIndex] = segment.endTime + 1;
+				laneEnds[laneIndex] = segment.endTime;
 				return { ...segment, laneIndex, renderMode: "lane" };
 			});
 		}
 
-		function buildTimelineAnnotationsApiUrl(extraParams = {}) {
-			return buildReviewApiUrl("/timeline-annotations", buildReviewerScopedParams(extraParams));
+		function buildTimelineAnnotationsApiUrl(extraParams = {}, context = {}) {
+			const scopedContext = buildReviewerScopedContext(context);
+			return buildReviewApiUrl("/timeline-annotations", {
+				...extraParams,
+				reviewer_id: scopedContext.reviewerId,
+			});
 		}
 
-		async function loadTimelineAnnotationsForUid(uid) {
-			if (!uid) return;
-			if (currentUiConfig.annotationEnabled === false || !getCurrentReviewerId()) {
-				timelinePinsByTrack[getCurrentTimelinePinStoreKey()] = [];
-				timelineSegmentsByTrack[getCurrentTimelinePinStoreKey()] = [];
+		async function loadTimelineAnnotationsForUid(uid, context = {}) {
+			const scopedContext = buildReviewerScopedContext({
+				...context,
+				uid,
+			});
+			if (!scopedContext.uid) return;
+			const storeKey = getCurrentTimelinePinStoreKey(scopedContext);
+			const requestSequence = ++timelineAnnotationLoadRequestSequence;
+			latestTimelineAnnotationLoadRequestByStoreKey[storeKey] = requestSequence;
+			if (currentUiConfig.annotationEnabled === false || !scopedContext.reviewerId) {
+				timelinePinsByTrack[storeKey] = [];
+				timelineSegmentsByTrack[storeKey] = [];
+				persistTimelineAnnotationStore(TIMELINE_PINS_STORAGE_KEY, timelinePinsByTrack);
+				persistTimelineAnnotationStore(TIMELINE_SEGMENTS_STORAGE_KEY, timelineSegmentsByTrack);
 				return;
 			}
 			try {
-				const response = await fetch(buildTimelineAnnotationsApiUrl({ uid }));
+				const response = await fetch(buildTimelineAnnotationsApiUrl({ uid: scopedContext.uid }, scopedContext));
 				if (!response.ok) throw new Error(`HTTP ${response.status}`);
 				const payload = await response.json();
 				const annotations = payload.annotations || {};
-				timelinePinsByTrack[getCurrentTimelinePinStoreKey()] = Array.isArray(annotations.pins) ? annotations.pins : [];
-				timelineSegmentsByTrack[getCurrentTimelinePinStoreKey()] = Array.isArray(annotations.segments) ? annotations.segments : [];
+				if (latestTimelineAnnotationLoadRequestByStoreKey[storeKey] !== requestSequence) return;
+				if (typeof annotations.segmentPolicy?.exclusiveMode === "boolean" && isReviewerScopedContextCurrent(scopedContext)) {
+					annotationSettings.exclusiveSegments = annotations.segmentPolicy.exclusiveMode;
+					persistAnnotationSettings();
+				}
+				timelinePinsByTrack[storeKey] = Array.isArray(annotations.pins) ? annotations.pins : [];
+				timelineSegmentsByTrack[storeKey] = Array.isArray(annotations.segments) ? annotations.segments : [];
 				persistTimelineAnnotationStore(TIMELINE_PINS_STORAGE_KEY, timelinePinsByTrack);
 				persistTimelineAnnotationStore(TIMELINE_SEGMENTS_STORAGE_KEY, timelineSegmentsByTrack);
 			} catch (_) {}
 		}
 
 		async function persistCurrentTimelineAnnotationsToServer() {
-			if (currentUiConfig.annotationEnabled === false || !currentUid || !getCurrentReviewerId()) return;
+			const scopedContext = buildReviewerScopedContext();
+			if (
+				currentUiConfig.annotationEnabled === false
+				|| !scopedContext.uid
+				|| !scopedContext.reviewerId
+				|| isReplayTimelineActiveForContext(scopedContext)
+			) return;
 			try {
-				await fetch(buildTimelineAnnotationsApiUrl(), {
+				await fetch(buildTimelineAnnotationsApiUrl({}, scopedContext), {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
-						uid: currentUid,
-						sample_id: currentUid,
-						reviewer_id: getCurrentReviewerId(),
-						reviewer_name: getCurrentReviewerName(),
-						pins: getCurrentTimelinePins(),
-						segments: getCurrentTimelineSegments(),
+						uid: scopedContext.uid,
+						sample_id: scopedContext.uid,
+						reviewer_id: scopedContext.reviewerId,
+						reviewer_name: scopedContext.reviewerName,
+						segmentPolicy: buildTimelineSegmentPolicyPayload(),
+						pins: getCurrentTimelinePins(scopedContext),
+						segments: getCurrentTimelineSegments(scopedContext),
 					}),
 				});
 			} catch (_) {}
 		}
 
+		function timelineSegmentContainsTime(segment, targetTime, epsilon = 0) {
+			if (!segment || targetTime == null) return false;
+			if (segment.startTime === segment.endTime) {
+				return Math.abs(targetTime - segment.endTime) <= epsilon;
+			}
+			if (isExclusiveTimelineSegmentModeEnabled()) {
+				return targetTime > segment.startTime && targetTime <= (segment.endTime + epsilon);
+			}
+			return targetTime >= (segment.startTime - epsilon) && targetTime <= (segment.endTime + epsilon);
+		}
+
 		function getTimelineSegmentsAtTime(targetTime, options = {}) {
 			if (targetTime == null) return [];
 			const epsilon = options.epsilon ?? 0;
-			return getCurrentTimelineSegments()
-				.filter(segment => targetTime >= (segment.startTime - epsilon) && targetTime <= (segment.endTime + epsilon))
+			return getActiveTimelineSegmentsForDisplay()
+				.filter(segment => timelineSegmentContainsTime(segment, targetTime, epsilon))
 				.sort((a, b) => (b.endTime - b.startTime) - (a.endTime - a.startTime) || (b.startTime - a.startTime));
 		}
 
 		function removeTimelineSegmentById(segmentId) {
 			if (!segmentId || currentUiConfig.annotationEnabled === false || !getCurrentReviewerId()) return;
+			if (!ensureTimelineAnnotationsWritable({ prompt: true, render: false })) return;
 			saveCurrentTimelineSegments(getCurrentTimelineSegments().filter(segment => segment.id !== segmentId));
 			renderTimeScrubberControl();
 		}
@@ -1847,6 +3568,13 @@
 		function renderTimeScrubberContextMenuItems() {
 			const menu = document.getElementById("time-scrubber-context-menu");
 			if (!menu) return;
+			if (isTimelineAnnotationReadOnly()) {
+				menu.innerHTML = `
+					<div class="time-scrubber-menu-section-label">只读回放</div>
+					<div class="review-aggregate-empty">${escapeHtml(getTimelineAnnotationReadOnlyMessage())}</div>
+				`;
+				return;
+			}
 			const contextPoint = (timeScrubberState.allPoints || [])[Math.max(0, Math.min((timeScrubberState.allPoints || []).length - 1, timeScrubberContextMenuState.pointIndex ?? timeScrubberState.selectedIndex ?? 0))];
 			const deleteSegmentItems = contextPoint
 				? getTimelineSegmentsAtTime(contextPoint.time).map(segment => `
@@ -1875,7 +3603,7 @@
 		}
 
 		function addTimelinePinAtIndex(pointIndex) {
-			if (!ensureAnnotationSessionReady({ prompt: true })) return;
+			if (!ensureTimelineAnnotationsWritable({ prompt: true })) return;
 			const points = timeScrubberState.allPoints || [];
 			const clampedIndex = Math.max(0, Math.min(points.length - 1, Math.round(pointIndex ?? timeScrubberState.selectedIndex ?? 0)));
 			const point = points[clampedIndex];
@@ -1985,6 +3713,15 @@
 					existingSegment: null,
 				};
 			}
+			if (isTimelineAnnotationReadOnly()) {
+				return {
+					action: "disabled",
+					buttonLabel: "整段标记",
+					statusText: getTimelineAnnotationReadOnlyMessage(),
+					disabled: true,
+					existingSegment: null,
+				};
+			}
 			if (!currentTimeWindow.enabled || !currentTimeWindow.startDay || !currentTimeWindow.endDay) {
 				return {
 					action: "disabled",
@@ -2058,7 +3795,7 @@
 		}
 
 		function upsertCurrentWindowQuickSegment() {
-			if (!ensureAnnotationSessionReady({ prompt: true })) return;
+			if (!ensureTimelineAnnotationsWritable({ prompt: true })) return;
 			const actionState = getCurrentWindowQuickSegmentActionState();
 			if (actionState.disabled || !actionState.selectedCategory || !actionState.bounds) return;
 			const nextSegment = buildCurrentWindowQuickSegment(
@@ -2067,7 +3804,23 @@
 				actionState.existingSegment,
 			);
 			const remainingSegments = getCurrentTimelineSegments().filter(segment => segment.id !== nextSegment.id);
-			saveCurrentTimelineSegments([...remainingSegments, nextSegment]);
+			if (isExclusiveTimelineSegmentModeEnabled()) {
+				const snappedBounds = snapTimelineSegmentStartForExclusiveMode(
+					remainingSegments,
+					nextSegment.startTime,
+					nextSegment.endTime,
+				);
+				const normalizedSegment = buildNormalizedTimelineSegment(
+					nextSegment,
+					snappedBounds.startTime,
+					snappedBounds.endTime,
+					{ categoryId: nextSegment.categoryId }
+				);
+				if (!normalizedSegment) return;
+				saveCurrentTimelineSegments([...remainingSegments, normalizedSegment]);
+			} else {
+				saveCurrentTimelineSegments([...remainingSegments, nextSegment]);
+			}
 			autoSelectAcceptDecisionAfterAnnotation();
 			renderTimeScrubberControl();
 		}
@@ -2187,6 +3940,7 @@
 			select.disabled = true;
 			const overviewCanvas = document.getElementById("time-scrubber-overview-canvas");
 			if (overviewCanvas) overviewCanvas.classList.remove("dragging");
+			renderTrackEditPanel();
 		}
 
 		function ensureTimeScrubberSelectionVisible() {
@@ -2294,6 +4048,129 @@
 			);
 		}
 
+		function getTimelineSegmentById(segmentId, options = {}) {
+			if (!segmentId) return null;
+			return getRenderableTimelineSegments({ includeDraft: options.includeDraft !== false })
+				.find(segment => segment.id === segmentId) || null;
+		}
+
+		function buildTimeScrubberSegmentStripModel(width, height, options = {}) {
+			const visiblePoints = getTimeScrubberVisiblePoints();
+			if (!visiblePoints.length || width <= 0 || height <= 0) return null;
+			const scale = createTimeScrubberScale(visiblePoints, width, height);
+			const maxLanes = Math.max(1, Math.round(options.maxLanes || 4));
+			const insetY = 2;
+			const laneGap = 2;
+			const laneAreaHeight = Math.max(8, height - insetY * 2);
+			const laneHeight = Math.max(4, (laneAreaHeight - laneGap * (maxLanes - 1)) / maxLanes);
+			const entries = getVisibleTimelineSegmentEntries(scale.minTime, scale.maxTime, {
+				maxLanes,
+				includeDraft: options.includeDraft !== false,
+			}).map(segment => {
+				const leftTime = Math.max(scale.minTime, segment.startTime);
+				const rightTime = Math.min(scale.maxTime, segment.endTime);
+				const startX = scale.getXForTime(leftTime);
+				const endX = scale.getXForTime(rightTime);
+				const x = Math.min(startX, endX);
+				const widthPx = Math.max(6, Math.abs(endX - startX));
+				const y = segment.renderMode === "cover"
+					? insetY
+					: (insetY + Math.max(0, segment.laneIndex) * (laneHeight + laneGap));
+				const heightPx = segment.renderMode === "cover" ? laneAreaHeight : laneHeight;
+				return {
+					segment,
+					x,
+					y,
+					widthPx,
+					heightPx,
+				};
+			});
+			return {
+				scale,
+				entries,
+			};
+		}
+
+		function getTimeScrubberSegmentHitAtClientPoint(clientX, clientY) {
+			if (!timeScrubberState.enabled || !timeScrubberState.allPoints.length) return null;
+			const canvas = document.getElementById("time-scrubber-segment-canvas");
+			if (!canvas) return null;
+			const rect = canvas.getBoundingClientRect();
+			if (rect.width <= 0 || rect.height <= 0) return null;
+			const model = buildTimeScrubberSegmentStripModel(rect.width, rect.height);
+			if (!model?.entries?.length) return null;
+			const targetX = clientX - rect.left;
+			const targetY = clientY - rect.top;
+			const hits = model.entries.filter(entry =>
+				targetX >= entry.x
+				&& targetX <= (entry.x + entry.widthPx)
+				&& targetY >= entry.y
+				&& targetY <= (entry.y + entry.heightPx)
+			);
+			if (!hits.length) return null;
+			hits.sort((left, right) => {
+				const leftPriority = left.segment.renderMode === "lane" ? 0 : 1;
+				const rightPriority = right.segment.renderMode === "lane" ? 0 : 1;
+				if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+				const leftDuration = (left.segment.endTime || 0) - (left.segment.startTime || 0);
+				const rightDuration = (right.segment.endTime || 0) - (right.segment.startTime || 0);
+				return leftDuration - rightDuration;
+			});
+			return hits[0];
+		}
+
+		function clearTimeScrubberHoveredSegment(options = {}) {
+			if (!timeScrubberState.hoveredSegmentId) return false;
+			timeScrubberState.hoveredSegmentId = "";
+			if (options.render !== false) renderTimeScrubberControl();
+			return true;
+		}
+
+		function updateTimeScrubberHoveredSegmentFromClientPoint(clientX, clientY) {
+			const hit = getTimeScrubberSegmentHitAtClientPoint(clientX, clientY);
+			const nextId = hit?.segment?.id || "";
+			if (nextId === (timeScrubberState.hoveredSegmentId || "")) return false;
+			timeScrubberState.hoveredSegmentId = nextId;
+			renderTimeScrubberControl();
+			return true;
+		}
+
+		function setTimeScrubberSelectedSegment(segmentId, options = {}) {
+			const segment = getTimelineSegmentById(segmentId, { includeDraft: options.includeDraft !== false });
+			const resolvedId = segment?.id || "";
+			const selectionChanged = resolvedId !== (timeScrubberState.selectedSegmentId || "");
+			timeScrubberState.selectedSegmentId = resolvedId;
+			if (!segment) {
+				if (selectionChanged && options.render !== false) renderTimeScrubberControl();
+				return selectionChanged;
+			}
+			if (options.syncSelection === true && Array.isArray(timeScrubberState.allPoints) && timeScrubberState.allPoints.length) {
+				const midpointTime = segment.startTime === segment.endTime
+					? segment.startTime
+					: (segment.startTime + segment.endTime) * 0.5;
+				const nearestIndex = findNearestTimeScrubberPointIndex(timeScrubberState.allPoints, midpointTime);
+				setTimeScrubberSelectedIndex(nearestIndex, { followView: true });
+				return true;
+			}
+			if (selectionChanged && options.render !== false) renderTimeScrubberControl();
+			return selectionChanged;
+		}
+
+		function selectTimeScrubberSegmentFromClientPoint(clientX, clientY) {
+			const hit = getTimeScrubberSegmentHitAtClientPoint(clientX, clientY);
+			const nextId = hit?.segment?.id || "";
+			const hoverChanged = nextId !== (timeScrubberState.hoveredSegmentId || "");
+			timeScrubberState.hoveredSegmentId = nextId;
+			if (nextId) {
+				setTimeScrubberSelectedSegment(nextId, { syncSelection: true });
+				return true;
+			}
+			const selectionChanged = !!timeScrubberState.selectedSegmentId;
+			timeScrubberState.selectedSegmentId = "";
+			if (hoverChanged || selectionChanged) renderTimeScrubberControl();
+			return hoverChanged || selectionChanged;
+		}
+
 		function setTimeScrubberWindowFromStartTime(targetStartTime, options = {}) {
 			const points = timeScrubberState.allPoints;
 			if (!Array.isArray(points) || !points.length) return;
@@ -2327,7 +4204,7 @@
 			const visibleEndTime = scale.maxTime;
 			const daySeconds = 24 * 3600;
 			const hourStepSeconds = getAdaptiveHourStepSeconds(visibleStartTime, visibleEndTime, 10);
-			const visiblePins = getCurrentTimelinePins().filter(pin => pin.time >= visibleStartTime && pin.time <= visibleEndTime);
+			const visiblePins = getActiveTimelinePinsForDisplay().filter(pin => pin.time >= visibleStartTime && pin.time <= visibleEndTime);
 			const visibleSegments = getVisibleTimelineSegmentEntries(visibleStartTime, visibleEndTime, { maxLanes: 3 });
 
 			ctx.strokeStyle = "rgba(226,232,240,0.35)";
@@ -2465,6 +4342,122 @@
 			}
 		}
 
+		function drawTimeScrubberSegmentCanvas() {
+			const canvas = document.getElementById("time-scrubber-segment-canvas");
+			if (!canvas) return;
+			const width = Math.max(32, canvas.clientWidth || canvas.offsetWidth || 0);
+			const height = Math.max(18, canvas.clientHeight || canvas.offsetHeight || 0);
+			const dpr = window.devicePixelRatio || 1;
+			canvas.width = Math.round(width * dpr);
+			canvas.height = Math.round(height * dpr);
+			const ctx = canvas.getContext("2d");
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+			ctx.clearRect(0, 0, width, height);
+			const maxLanes = 4;
+			const insetY = 2;
+			const laneGap = 3;
+			const laneAreaHeight = Math.max(8, height - insetY * 2);
+			const laneHeight = Math.max(4, (laneAreaHeight - laneGap * (maxLanes - 1)) / maxLanes);
+			for (let laneIndex = 0; laneIndex < maxLanes; laneIndex += 1) {
+				const laneY = insetY + laneIndex * (laneHeight + laneGap);
+				ctx.fillStyle = laneIndex % 2 === 0 ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)";
+				ctx.beginPath();
+				if (typeof ctx.roundRect === "function") {
+					ctx.roundRect(0, laneY, width, laneHeight, 999);
+				} else {
+					ctx.rect(0, laneY, width, laneHeight);
+				}
+				ctx.fill();
+			}
+			const model = buildTimeScrubberSegmentStripModel(width, height, { maxLanes });
+			if (!model?.entries?.length) {
+				if (width >= 160) {
+					ctx.fillStyle = "rgba(226,232,240,0.7)";
+					ctx.font = "600 11px system-ui";
+					ctx.textAlign = "center";
+					ctx.fillText("当前窗口无分段", width / 2, height / 2 + 4);
+				}
+				return;
+			}
+			model.entries.forEach(entry => {
+				const segment = entry.segment;
+				const isHovered = segment.id && segment.id === timeScrubberState.hoveredSegmentId;
+				const isSelected = segment.id && segment.id === timeScrubberState.selectedSegmentId;
+				const fillAlpha = segment.isDraft ? 0.76 : (segment.renderMode === "cover" ? 0.74 : 0.94);
+				const strokeAlpha = isHovered ? 1 : (isSelected ? 0.96 : 0.88);
+				const innerWidth = Math.max(0, entry.widthPx - 2);
+				const innerHeight = Math.max(0, Math.min(entry.heightPx - 2, Math.max(4, entry.heightPx * 0.48)));
+				ctx.save();
+				ctx.globalAlpha = fillAlpha;
+				ctx.fillStyle = segment.color || "#60a5fa";
+				ctx.strokeStyle = isHovered
+					? `rgba(255,255,255,${strokeAlpha})`
+					: (isSelected ? `rgba(248,250,252,${strokeAlpha})` : "rgba(15,23,42,0.9)");
+				ctx.lineWidth = isHovered ? 2.2 : (isSelected ? 1.8 : 1.15);
+				ctx.shadowColor = isHovered
+					? "rgba(255,255,255,0.38)"
+					: (isSelected ? "rgba(148,163,184,0.26)" : "transparent");
+				ctx.shadowBlur = isHovered ? 10 : (isSelected ? 6 : 0);
+				if (segment.isDraft) ctx.setLineDash([5, 3]);
+				ctx.beginPath();
+				if (typeof ctx.roundRect === "function") {
+					ctx.roundRect(entry.x, entry.y, entry.widthPx, entry.heightPx, 999);
+				} else {
+					ctx.rect(entry.x, entry.y, entry.widthPx, entry.heightPx);
+				}
+				ctx.fill();
+				ctx.stroke();
+				if (innerWidth > 0 && innerHeight > 0) {
+					ctx.shadowBlur = 0;
+					ctx.globalAlpha = isHovered ? 0.28 : (isSelected ? 0.2 : 0.14);
+					ctx.fillStyle = "rgba(255,255,255,1)";
+					ctx.beginPath();
+					if (typeof ctx.roundRect === "function") {
+						ctx.roundRect(entry.x + 1, entry.y + 1, innerWidth, innerHeight, 999);
+					} else {
+						ctx.rect(entry.x + 1, entry.y + 1, innerWidth, innerHeight);
+					}
+					ctx.fill();
+				}
+				ctx.restore();
+			});
+		}
+
+		function renderTimeScrubberSegmentDetail() {
+			const detail = document.getElementById("time-scrubber-segment-detail");
+			if (!detail) return;
+			if (!timeScrubberState.focusLayers.length || !timeScrubberState.enabled || !timeScrubberState.allPoints.length) {
+				detail.textContent = "";
+				return;
+			}
+			const visibleBounds = getCurrentVisibleTimeBounds();
+			const visibleSegments = visibleBounds
+				? getVisibleTimelineSegmentEntries(visibleBounds.start, visibleBounds.end, { maxLanes: 4 })
+				: [];
+			const hoveredSegment = getTimelineSegmentById(timeScrubberState.hoveredSegmentId);
+			const selectedSegment = getTimelineSegmentById(timeScrubberState.selectedSegmentId);
+			const replayLabel = getReplayTimelineSourceLabel();
+			if (timeScrubberState.hoveredSegmentId && !hoveredSegment) timeScrubberState.hoveredSegmentId = "";
+			if (timeScrubberState.selectedSegmentId && !selectedSegment) timeScrubberState.selectedSegmentId = "";
+			const targetSegment = hoveredSegment || selectedSegment;
+			const summaryText = visibleSegments.length ? `当前窗口 ${visibleSegments.length} 段` : "当前窗口无分段";
+			const replayText = replayLabel ? ` | 回放 ${replayLabel}` : "";
+			if (!targetSegment) {
+				detail.innerHTML = `
+					<span class="time-scrubber-segment-detail-chip" style="background:rgba(148,163,184,0.88)"></span>
+					<span class="time-scrubber-segment-detail-title">分段层</span>
+					<span class="time-scrubber-segment-detail-text">${escapeHtml(`${summaryText}${replayText} | 悬停或点击下方色块查看`)}</span>
+				`;
+				return;
+			}
+			const modeLabel = hoveredSegment ? "悬停分段" : "选中分段";
+			detail.innerHTML = `
+				<span class="time-scrubber-segment-detail-chip" style="background:${escapeHtml(targetSegment.color || "#60a5fa")}"></span>
+				<span class="time-scrubber-segment-detail-title">${escapeHtml(targetSegment.categoryName || "未命名标签")}</span>
+				<span class="time-scrubber-segment-detail-text">${escapeHtml(`${modeLabel}${replayText} | ${formatTimeWindow(targetSegment.startTime, targetSegment.endTime)} | ${summaryText}`)}</span>
+			`;
+		}
+
 		function drawTimeScrubberOverviewCanvas() {
 			const canvas = document.getElementById("time-scrubber-overview-canvas");
 			const points = timeScrubberState.allPoints || [];
@@ -2484,7 +4477,7 @@
 			const color = getTimeScrubberPointColor(activePoint || points[0]);
 			const centerY = height / 2;
 			const marks = sampleEvenly(points, 1200);
-			const pins = getCurrentTimelinePins();
+			const pins = getActiveTimelinePinsForDisplay();
 			const segments = assignTimelineSegmentLanes(getRenderableTimelineSegments({ includeDraft: true }), 2);
 
 			ctx.strokeStyle = "rgba(226,232,240,0.34)";
@@ -2594,12 +4587,14 @@
 			const zoomOutBtn = document.getElementById("time-scrubber-zoom-out");
 			const zoomInBtn = document.getElementById("time-scrubber-zoom-in");
 			const overviewCanvas = document.getElementById("time-scrubber-overview-canvas");
+			const replayLabel = getReplayTimelineSourceLabel();
 			updateDateWindowControl();
 			if (!timeScrubberState.focusLayers.length) {
 				hideTimeScrubberContextMenu();
 				control.classList.add("hidden");
 				overviewCanvas.classList.remove("dragging");
 				updateTimeScrubberOverviewCursor();
+				renderTimeScrubberSegmentDetail();
 				clearTimeFocusMarker();
 				return;
 			}
@@ -2607,8 +4602,12 @@
 			buildTimeScrubberLayerOptions();
 			if (!timeScrubberState.enabled || !timeScrubberState.allPoints.length) {
 				hideTimeScrubberContextMenu();
-				document.getElementById("time-scrubber-status").textContent = `${getLayerLabel(timeScrubberState.selectedLayer)} | 当前日期区间内无可定位时间点`;
-				document.getElementById("time-scrubber-range").textContent = `日期区间 ${currentTimeWindow.startDay || "--"} -- ${currentTimeWindow.endDay || "--"} | 可切换其他图层继续查看`;
+				document.getElementById("time-scrubber-status").textContent = replayLabel
+					? `${getLayerLabel(timeScrubberState.selectedLayer)} | 当前日期区间内无可定位时间点 | 回放 ${replayLabel}`
+					: `${getLayerLabel(timeScrubberState.selectedLayer)} | 当前日期区间内无可定位时间点`;
+				document.getElementById("time-scrubber-range").textContent = replayLabel
+					? `日期区间 ${currentTimeWindow.startDay || "--"} -- ${currentTimeWindow.endDay || "--"} | 可切换其他图层继续查看 | 只读回放`
+					: `日期区间 ${currentTimeWindow.startDay || "--"} -- ${currentTimeWindow.endDay || "--"} | 可切换其他图层继续查看`;
 				stepPrevBtn.disabled = true;
 				stepNextBtn.disabled = true;
 				leftBtn.disabled = true;
@@ -2618,7 +4617,9 @@
 				overviewCanvas.classList.remove("dragging");
 				updateTimeScrubberOverviewCursor();
 				drawTimeScrubberCanvas();
+				drawTimeScrubberSegmentCanvas();
 				drawTimeScrubberOverviewCanvas();
+				renderTimeScrubberSegmentDetail();
 				clearTimeFocusMarker();
 				return;
 			}
@@ -2630,10 +4631,14 @@
 			const statusText = selectedPoint
 				? `${getLayerLabel(timeScrubberState.selectedLayer)} | 当前 ${formatDateTime(selectedPoint.time)} | 第 ${timeScrubberState.selectedIndex + 1} / ${total} 点`
 				: `${getLayerLabel(timeScrubberState.selectedLayer)} | 共 ${total} 点`;
-			document.getElementById("time-scrubber-status").textContent = statusText;
+			document.getElementById("time-scrubber-status").textContent = replayLabel
+				? `${statusText} | 回放 ${replayLabel}`
+				: statusText;
 			document.getElementById("time-scrubber-range").textContent = segmentDraftState.active
 				? `正在标记 ${getAnnotationCategoryLabel(segmentDraftState.categoryId)} | 起点 ${formatDateTime(segmentDraftState.startTime)} | 预览终点 ${formatDateTime(segmentDraftState.previewTime)}`
-				: `日期区间 ${currentTimeWindow.startDay || "--"} -- ${currentTimeWindow.endDay || "--"} | 当前窗口 ${startIndex + 1}-${endIndex + 1} / ${total}`;
+				: replayLabel
+					? `日期区间 ${currentTimeWindow.startDay || "--"} -- ${currentTimeWindow.endDay || "--"} | 当前窗口 ${startIndex + 1}-${endIndex + 1} / ${total} | 只读回放`
+					: `日期区间 ${currentTimeWindow.startDay || "--"} -- ${currentTimeWindow.endDay || "--"} | 当前窗口 ${startIndex + 1}-${endIndex + 1} / ${total}`;
 			stepPrevBtn.disabled = timeScrubberState.selectedIndex <= 0;
 			stepNextBtn.disabled = timeScrubberState.selectedIndex >= total - 1;
 			const maxStart = getTimeScrubberMaxStart(total);
@@ -2646,7 +4651,9 @@
 			overviewCanvas.classList.toggle("dragging", !!timeScrubberState.isOverviewDragging);
 			updateTimeScrubberOverviewCursor();
 			drawTimeScrubberCanvas();
+			drawTimeScrubberSegmentCanvas();
 			drawTimeScrubberOverviewCanvas();
+			renderTimeScrubberSegmentDetail();
 			updateTimeFocusMarker();
 		}
 
@@ -3129,7 +5136,127 @@
 			return new Set(sampleEvenly(buckets, maxTooltipBuckets).map(bucket => bucket.key));
 		}
 
-		function renderOneLayer(layerKey, data, targetGroup) {
+		function buildTrackEditMarkerIcon(layerKey, row, pointId) {
+			const pointColor = getPointColor(layerKey, row);
+			const markerSize = Math.max(12, (getPointSize(layerKey, row) * 2) + 4);
+			const classNames = ["track-edit-marker"];
+			if (trackEditState.selectedPointIds.includes(pointId)) classNames.push("selected");
+			if (trackEditState.anchorPointId === pointId) classNames.push("anchor");
+			if (trackEditState.selectedPointIds.length > 1 && trackEditState.selectedPointIds.includes(pointId)) {
+				classNames.push("multi");
+			}
+			return L.divIcon({
+				className: "track-edit-marker-wrap",
+				html: `<div class="${classNames.join(" ")}" style="--track-edit-color:${escapeHtml(pointColor)};--track-edit-size:${markerSize}px"></div>`,
+				iconSize: [markerSize, markerSize],
+				iconAnchor: [markerSize / 2, markerSize / 2],
+			});
+		}
+
+		function bindTrackEditMarkerEvents(marker, pointRef) {
+			marker.__studioPointId = pointRef.pointId;
+			marker.__studioTrackPointRef = pointRef;
+			marker.on("click", (event) => {
+				if (!trackEditState.enabled || Date.now() < (trackEditState.dragSuppressClickUntil || 0)) return;
+				const originalEvent = event?.originalEvent || {};
+				selectTrackEditPoint(pointRef.pointId, {
+					toggle: !!(originalEvent.ctrlKey || originalEvent.metaKey),
+					range: !!originalEvent.shiftKey,
+				});
+			});
+			marker.on("contextmenu", (event) => {
+				if (!trackEditState.enabled) return;
+				const originalEvent = event?.originalEvent || {};
+				originalEvent.preventDefault?.();
+				originalEvent.stopPropagation?.();
+				if (!trackEditState.selectedPointIds.includes(pointRef.pointId)) {
+					selectTrackEditPoint(pointRef.pointId, { syncTimeScrubber: false });
+				}
+				openTrackEditContextMenu(
+					originalEvent.clientX || 0,
+					originalEvent.clientY || 0,
+					pointRef.pointId,
+				);
+			});
+			marker.on("dragstart", () => beginTrackEditMarkerDrag(pointRef.pointId, marker));
+			marker.on("drag", () => updateTrackEditMarkerDrag(pointRef.pointId, marker));
+			marker.on("dragend", () => commitTrackEditMarkerDrag(pointRef.pointId, marker));
+		}
+
+		function renderEditableTrackLayer(layerKey, data, targetGroup, renderStats, options = {}) {
+			const cfg = layerConfig[layerKey] || {};
+			const style = layerStyles[layerKey] || {};
+			const trackEditMarkersById = options.trackEditMarkersById || {};
+			const rows = data || [];
+			if (!rows.length) return renderStats;
+			const rowsBySegment = {};
+			const orderedRows = [];
+			rows.forEach((row, rowIndex) => {
+				const pointRef = buildTrackPointReference(currentUid, layerKey, row, rowIndex);
+				if (!pointRef) return;
+				orderedRows.push({ row, pointRef });
+				if (cfg.lineOnly && (row.segment_idx != null || row.point_order != null)) {
+					const segmentKey = row.segment_idx != null ? row.segment_idx : 0;
+					(rowsBySegment[segmentKey] ||= []).push(row);
+				}
+			});
+
+			if (cfg.lineOnly && Object.keys(rowsBySegment).length) {
+				Object.values(rowsBySegment).forEach((segmentRows) => {
+					segmentRows.sort((a, b) => (Number(a.point_order || 0) - Number(b.point_order || 0)));
+					const coords = segmentRows
+						.map((row) => {
+							const coord = getRowCoordinate(row);
+							return coord ? toGcj(coord.lat, coord.lon) : null;
+						})
+						.filter(Boolean);
+					renderStats.polylinePoints += coords.length;
+					if (coords.length >= 2) {
+						L.polyline(coords, { color: style.color, weight: 3, opacity: style.opacity }).addTo(targetGroup);
+						renderStats.arrowCount += addSegmentArrows(coords, style.color, style.opacity, targetGroup, coords.length);
+					}
+				});
+			} else if (cfg.hasLine) {
+				const coords = orderedRows
+					.map(({ row }) => {
+						const coord = getRowCoordinate(row);
+						return coord ? toGcj(coord.lat, coord.lon) : null;
+					})
+					.filter(Boolean);
+				renderStats.polylinePoints = coords.length;
+				if (coords.length >= 2) {
+					L.polyline(coords, {
+						color: style.color,
+						weight: cfg.kind === "gps" ? 2 : 2,
+						opacity: style.opacity,
+						dashArray: cfg.dashArray || undefined,
+					}).addTo(targetGroup);
+					renderStats.arrowCount += addSegmentArrows(coords, style.color, style.opacity, targetGroup, coords.length);
+				}
+			}
+
+			orderedRows.forEach(({ row, pointRef }) => {
+				const coord = getRowCoordinate(row);
+				if (!coord) return;
+				const [displayLat, displayLon] = toGcj(coord.lat, coord.lon);
+				const bucket = { key: pointRef.pointId, rows: [row], firstRow: row, lat: coord.lat, lon: coord.lon };
+				const marker = L.marker([displayLat, displayLon], {
+					icon: buildTrackEditMarkerIcon(layerKey, row, pointRef.pointId),
+					draggable: !!trackEditState.enabled,
+					keyboard: false,
+					zIndexOffset: trackEditState.selectedPointIds.includes(pointRef.pointId) ? 900 : 0,
+				}).addTo(targetGroup);
+				marker.__studioLayerKey = layerKey;
+				marker.__studioBucket = bucket;
+				bindTrackEditMarkerEvents(marker, pointRef);
+				trackEditMarkersById[pointRef.pointId] = marker;
+				renderStats.markerBuckets += 1;
+			});
+			renderStats.reduced = false;
+			return renderStats;
+		}
+
+		function renderOneLayer(layerKey, data, targetGroup, options = {}) {
 			const cfg = layerConfig[layerKey];
 			const style = layerStyles[layerKey];
 			const profile = getLayerRenderProfile(layerKey, data?.length || 0);
@@ -3142,6 +5269,9 @@
 				reduced: false,
 			};
 			if (!data || !data.length || !style || !style.visible) return renderStats;
+			if (trackEditState.enabled && isTrackEditLayerEditable(layerKey)) {
+				return renderEditableTrackLayer(layerKey, data, targetGroup, renderStats, options);
+			}
 
 			if (isOdLayer(layerKey)) {
 				const rows = sampleEvenly(data, profile.maxBuckets);
@@ -3353,16 +5483,18 @@
 			if (!cached) {
 				const group = L.layerGroup();
 				const renderStatsList = [];
+				const trackEditMarkersById = {};
 				for (const layer of toLoad) {
-					renderStatsList.push(renderOneLayer(layer, displayDataByLayer[layer], group));
+					renderStatsList.push(renderOneLayer(layer, displayDataByLayer[layer], group, { trackEditMarkersById }));
 				}
 				const bounds = getBoundsFromGroup(group);
-				cached = { group, bounds, renderStatsList };
+				cached = { group, bounds, renderStatsList, trackEditMarkersById };
 				putRenderedCache(cacheKey, cached);
 			}
 
 			clearActiveGroup();
 			activeGroup = cached.group;
+			trackEditState.renderedMarkersByPointId = cached.trackEditMarkersById || {};
 			activeGroup.addTo(map);
 			if (cached.bounds && options.forceFit) map.fitBounds(cached.bounds, { padding: [20, 20] });
 			lastAppliedMapDisplaySignature = cacheKey;
@@ -3388,18 +5520,31 @@
 		}
 
 		async function renderUid(uid, options = {}) {
+			const requestSequence = ++renderUidRequestSequence;
 			const prevUid = currentUid;
 			currentUid = uid;
+			reconcileReplayTimelineStateForCurrentSelection({ uid, batchName: currentBatchName });
 			if (prevUid !== uid && segmentDraftState.active) cancelTimelineSegmentDraft({ silent: true });
+			if (prevUid !== uid) clearTrackEditSelection({ render: false });
+			if (options.resetTrackEditState) {
+				clearTrackEditInteractionState({ resetStatus: true });
+			}
 			cancelScheduledMapDisplayRefresh();
 			clearActiveGroup();
+			const scopedContext = buildReviewerScopedContext({ uid });
 
 			const meta = await ensureUidMeta(uid);
+			if (!isRenderUidRequestCurrent(requestSequence)) return;
 			const exists = meta.exists;
 			const toLoad = layerOrder.filter(l => exists[l]);
-			const rawDataByLayer = Object.fromEntries(
-				await Promise.all(toLoad.map(async (l) => [l, await fetchCsv(uid, l)]))
+			const baseRawDataByLayer = Object.fromEntries(
+				await Promise.all(toLoad.map(async (l) => [l, decorateTrackRowsWithPointMeta(uid, l, await fetchCsv(uid, l))]))
 			);
+			if (!isRenderUidRequestCurrent(requestSequence)) return;
+			currentBaseRawDataByLayer = baseRawDataByLayer;
+			await loadTrackEditsForUid(uid, scopedContext);
+			if (!isRenderUidRequestCurrent(requestSequence)) return;
+			const rawDataByLayer = applyTrackEditsToDataByLayer(baseRawDataByLayer);
 			syncTimeWindowFromLayerData(rawDataByLayer, {
 				resetSelection: options.resetTimeWindow ?? (prevUid !== uid),
 			});
@@ -3409,7 +5554,10 @@
 			currentRawDataByLayer = rawDataByLayer;
 			currentFilteredDataByLayer = filteredDataByLayer;
 			currentExistsByLayer = exists;
-			await loadTimelineAnnotationsForUid(uid);
+			rebuildTrackEditPointIndex();
+			reconcileTrackEditSelection();
+			await loadTimelineAnnotationsForUid(uid, scopedContext);
+			if (!isRenderUidRequestCurrent(requestSequence)) return;
 			syncCurrentWindowQuickSegmentCategory({ preferExisting: true });
 			syncTimeScrubberFromCurrentData({
 				preserveTime: options.preserveScrubberTime ?? (prevUid === uid),
@@ -3418,8 +5566,10 @@
 			renderMapDisplayFromCurrentState({ exists, forceFit: prevUid !== uid || options.forceFit });
 			if (!options.skipReviewReload) {
 				await loadReviewForUid(uid, exists);
+				if (!isRenderUidRequestCurrent(requestSequence)) return;
 			}
 			renderTriageBoard({ resetVisibleCounts: false });
+			renderTrackEditPanel();
 		}
 
 		function renderLayerControls(exists) {

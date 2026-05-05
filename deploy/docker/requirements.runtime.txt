@@ -1,0 +1,8 @@
+numpy
+pandas
+tqdm
+geopy
+shapely
+matplotlib
+Pillow
+pyshp

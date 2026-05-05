@@ -90,6 +90,14 @@
 		document.getElementById("review-aggregate-toggle").addEventListener("click", () => {
 			setReviewAggregateCollapsed(!reviewAggregateCollapsed, { userInitiated: true });
 		});
+		document.getElementById("review-aggregate-list").addEventListener("click", async (event) => {
+			const replayButton = event.target.closest(".review-aggregate-replay-btn[data-replay-reviewer-id]");
+			if (!replayButton) return;
+			await toggleReplayTimelineForReviewer(
+				replayButton.dataset.replayReviewerId,
+				replayButton.dataset.replayReviewerName || "",
+			);
+		});
 		document.getElementById("review-panel-toggle").addEventListener("click", () => {
 			setReviewPanelCollapsed(!reviewPanelCollapsed);
 		});
@@ -139,8 +147,24 @@
 		document.getElementById("map-view-follow-cb").addEventListener("change", (e) => {
 			mapViewFollowScrubber = e.target.checked;
 		});
+		const trackEditToggle = document.getElementById("track-edit-toggle");
+		const reviewModeAnnotationButton = document.getElementById("review-mode-annotation-btn");
+		const trackEditClearSelection = document.getElementById("track-edit-clear-selection");
+		const trackEditUndoButton = document.getElementById("track-edit-undo-btn");
+		const trackEditRedoButton = document.getElementById("track-edit-redo-btn");
+		const trackEditSaveButton = document.getElementById("track-edit-save-btn");
+		const trackEditSaveOptionsButton = document.getElementById("track-edit-save-options-btn");
+		const trackEditSaveMenu = document.getElementById("track-edit-save-menu");
+		const trackEditSaveOverwrite = document.getElementById("track-edit-save-overwrite");
+		const trackEditSaveDownload = document.getElementById("track-edit-save-download");
+		const trackEditShowCoordinates = document.getElementById("track-edit-show-coordinates");
+		const trackEditContextMenu = document.getElementById("track-edit-context-menu");
+		const trackEditContextValue = document.getElementById("track-edit-context-value");
+		const trackEditContextApply = document.getElementById("track-edit-context-apply");
+		const trackEditContextClose = document.getElementById("track-edit-context-close");
 		const timeScrubberControl = document.getElementById("time-scrubber-control");
 		const timeScrubberCanvas = document.getElementById("time-scrubber-canvas");
+		const timeScrubberSegmentCanvas = document.getElementById("time-scrubber-segment-canvas");
 		const timeScrubberOverviewCanvas = document.getElementById("time-scrubber-overview-canvas");
 		const timeScrubberLayerSelect = document.getElementById("time-scrubber-layer-select");
 		const timeScrubberStepPrev = document.getElementById("time-scrubber-step-prev");
@@ -157,7 +181,9 @@
 		const annotationTagAdd = document.getElementById("annotation-tag-add");
 		const annotationFocusOpacityInput = document.getElementById("annotation-focus-opacity");
 		const annotationIdleOpacityInput = document.getElementById("annotation-idle-opacity");
+		const annotationExclusiveModeInput = document.getElementById("annotation-exclusive-mode");
 		const studioManagementEntry = document.getElementById("studio-management-entry");
+		const studioExportEntry = document.getElementById("studio-export-entry");
 		const studioManagementOverlay = document.getElementById("studio-management-overlay");
 		const studioManagementClose = document.getElementById("studio-management-close");
 		const studioManagementRefreshBtn = document.getElementById("studio-management-refresh-btn");
@@ -170,8 +196,15 @@
 		const studioManagementCustomFields = document.getElementById("studio-management-custom-fields");
 		const studioManagementHelpAnchor = document.getElementById("studio-management-help-anchor");
 		const studioManagementHelpTrigger = document.getElementById("studio-management-help-trigger");
+		const studioExportBatchSelect = document.getElementById("studio-export-batch-select");
+		const studioExportUidSelect = document.getElementById("studio-export-uid-select");
+		const studioExportTagSelect = document.getElementById("studio-export-tag-select");
+		const studioExportDownloadBtn = document.getElementById("studio-export-download-btn");
+		const studioExportDatasetBtn = document.getElementById("studio-export-dataset-btn");
 		const themeModeToggle = document.getElementById("theme-mode-toggle");
 		const themeModeLabel = document.getElementById("theme-mode-label");
+		const basemapModeControls = document.getElementById("basemap-mode-controls");
+		const basemapModeStatus = document.getElementById("basemap-mode-status");
 		const THEME_MODE_STORAGE_KEY = "studioThemeMode";
 		const THEME_MODE_DAY = "day";
 		const THEME_MODE_NIGHT = "night";
@@ -204,20 +237,75 @@
 			applyThemeMode(themeMode === THEME_MODE_NIGHT ? THEME_MODE_DAY : THEME_MODE_NIGHT);
 		});
 
-		let timeScrubberScrollWheelSuppressed = false;
-		function suppressMapScrollWheelForTimeScrubber() {
-			if (timeScrubberScrollWheelSuppressed || typeof map === "undefined" || !map?.scrollWheelZoom) return;
+		function getBasemapOptions() {
+			const presets = typeof getMapTilePresets === "function" ? getMapTilePresets() : (MAP_TILE_PRESETS || {});
+			const preferredOrder = ["offline", "intranet", "online"];
+			const optionKeys = preferredOrder.filter(key => presets[key]).concat(
+				Object.keys(presets).filter(key => !preferredOrder.includes(key))
+			);
+			return optionKeys.map((key) => ({
+				key,
+				...(presets[key] || {}),
+			}));
+		}
+
+		function renderBasemapModeControls() {
+			if (!basemapModeControls || !basemapModeStatus) return;
+			const activeConfig = typeof getMapTileConfig === "function" ? getMapTileConfig() : MAP_TILE_CONFIG;
+			const activeMode = normalizeTileMode(activeConfig?.mode || "offline") || "offline";
+			const options = getBasemapOptions();
+			basemapModeControls.innerHTML = options.map((option) => `
+				<button
+					type="button"
+					class="basemap-mode-option${activeMode === option.key ? " active" : ""}"
+					data-basemap-mode="${escapeHtml(option.key)}"
+					aria-pressed="${activeMode === option.key ? "true" : "false"}"
+					title="${escapeHtml(option.description || option.label || option.key)}"
+				>
+					<span class="basemap-mode-label">${escapeHtml(option.label || option.key)}</span>
+					<span class="basemap-mode-caption">${escapeHtml(option.description || option.url || "")}</span>
+				</button>
+			`).join("");
+			const currentLabel = options.find(option => option.key === activeMode)?.label || activeMode;
+			const currentCoordinateSystem = String(activeConfig?.coordinateSystem || "wgs84").toUpperCase();
+			const currentUrl = String(activeConfig?.url || "").trim();
+			basemapModeStatus.textContent = currentUrl
+				? `当前底图：${currentLabel} · ${currentCoordinateSystem} · ${currentUrl}`
+				: `当前底图：${currentLabel} · ${currentCoordinateSystem}`;
+		}
+
+		basemapModeControls?.addEventListener("click", (event) => {
+			const button = event.target.closest("button[data-basemap-mode]");
+			if (!button) return;
+			const nextMode = normalizeTileMode(button.dataset.basemapMode);
+			if (!nextMode) return;
+			const currentMode = normalizeTileMode((typeof getMapTileConfig === "function" ? getMapTileConfig() : MAP_TILE_CONFIG)?.mode);
+			if (currentMode === nextMode) return;
 			try {
-				map.scrollWheelZoom.disable();
-				timeScrubberScrollWheelSuppressed = true;
-			} catch (_) {}
+				applyBasemapMode(nextMode, { persist: true, keepView: true });
+				renderBasemapModeControls();
+				setBatchStatus(`底图已切换：${button.querySelector(".basemap-mode-label")?.textContent || nextMode}`);
+			} catch (error) {
+				setBatchStatus(`底图切换失败：${error?.message || error}`, true);
+			}
+		});
+
+		let timeScrubberScrollWheelSuppressed = false;
+		function setTrackEditScrollWheelSuppressed(nextSuppressed) {
+			trackEditState.scrollWheelSuppressed = !!nextSuppressed;
+			if (typeof syncTrackEditMapInteractionLock === "function") {
+				syncTrackEditMapInteractionLock();
+			}
+		}
+		function suppressMapScrollWheelForTimeScrubber() {
+			if (timeScrubberScrollWheelSuppressed) return;
+			timeScrubberScrollWheelSuppressed = true;
+			setTrackEditScrollWheelSuppressed(true);
 		}
 		function restoreMapScrollWheelAfterTimeScrubber() {
-			if (!timeScrubberScrollWheelSuppressed || typeof map === "undefined" || !map?.scrollWheelZoom) return;
-			try {
-				map.scrollWheelZoom.enable();
-			} catch (_) {}
+			if (!timeScrubberScrollWheelSuppressed) return;
 			timeScrubberScrollWheelSuppressed = false;
+			setTrackEditScrollWheelSuppressed(false);
 		}
 		timeScrubberControl.addEventListener("mouseenter", () => {
 			setTimeScrubberActive(true);
@@ -242,6 +330,51 @@
 		timeScrubberRight.addEventListener("click", () => panTimeScrubberWindow(1));
 		timeScrubberZoomOut.addEventListener("click", () => zoomTimeScrubberWindow(1 + TIME_SCRUBBER_ZOOM_STEP));
 		timeScrubberZoomIn.addEventListener("click", () => zoomTimeScrubberWindow(1 - TIME_SCRUBBER_ZOOM_STEP));
+		trackEditToggle?.addEventListener("click", () => {
+			toggleTrackEditMode();
+		});
+		reviewModeAnnotationButton?.addEventListener("click", () => {
+			if (!trackEditState.enabled) return;
+			setTrackEditModeEnabled(false);
+		});
+		trackEditClearSelection?.addEventListener("click", () => {
+			clearTrackEditSelection();
+		});
+		trackEditUndoButton?.addEventListener("click", () => {
+			undoTrackEditChange();
+		});
+		trackEditRedoButton?.addEventListener("click", () => {
+			redoTrackEditChange();
+		});
+		trackEditSaveButton?.addEventListener("click", () => {
+			void saveCurrentTrackEdits();
+		});
+		trackEditSaveOptionsButton?.addEventListener("click", (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+			if (trackEditState.saveMenuOpen) closeTrackEditSaveMenu();
+			else openTrackEditSaveMenu(event.currentTarget);
+			renderTrackEditPanel();
+		});
+		trackEditSaveOverwrite?.addEventListener("click", () => {
+			void saveCurrentTrackEdits({ overwrite: true });
+		});
+		trackEditSaveDownload?.addEventListener("click", () => {
+			downloadCurrentTrackEditsAsJson();
+		});
+		trackEditShowCoordinates?.addEventListener("change", (event) => {
+			trackEditState.showCoordinates = !!event.target.checked;
+			renderTrackEditPanel();
+		});
+		trackEditContextValue?.addEventListener("change", (event) => {
+			trackEditState.contextValue = String(event.target.value || "").trim();
+		});
+		trackEditContextApply?.addEventListener("click", () => {
+			applyTrackEditMetadataPatch(trackEditState.contextValue || trackEditContextValue?.value || "");
+		});
+		trackEditContextClose?.addEventListener("click", () => {
+			closeTrackEditContextMenu();
+		});
 		timeScrubberContextMenu.addEventListener("click", (event) => {
 			const actionButton = event.target.closest(".time-scrubber-menu-item[data-action]");
 			if (!actionButton || timeScrubberContextMenuState.pointIndex == null) return;
@@ -278,10 +411,11 @@
 			showTimeScrubberContextMenu(event.clientX, event.clientY, timeScrubberState.selectedIndex);
 			setTimeScrubberActive(true);
 		});
-		timeScrubberControl.addEventListener("wheel", (event) => {
-			if (event.target.closest("#date-window-control")) return;
-			handleTimeScrubberWheel(event);
-		}, { passive: false });
+		// 暂时关闭时间轴对滚轮的响应，避免与地图缩放同时触发。
+		// timeScrubberControl.addEventListener("wheel", (event) => {
+		// 	if (event.target.closest("#date-window-control")) return;
+		// 	handleTimeScrubberWheel(event);
+		// }, { passive: false });
 		timeScrubberCanvas.addEventListener("pointermove", (event) => {
 			if (timeScrubberState.isDragging) {
 				event.preventDefault();
@@ -317,6 +451,22 @@
 		timeScrubberCanvas.addEventListener("pointercancel", stopTimeScrubberDragging);
 		timeScrubberCanvas.addEventListener("pointerleave", () => {
 			if (!timeScrubberState.isDragging) setTimeScrubberActive(false);
+		});
+		timeScrubberSegmentCanvas?.addEventListener("pointermove", (event) => {
+			if (!timeScrubberState.enabled) return;
+			setTimeScrubberActive(true);
+			updateTimeScrubberHoveredSegmentFromClientPoint(event.clientX, event.clientY);
+		});
+		timeScrubberSegmentCanvas?.addEventListener("pointerleave", () => {
+			clearTimeScrubberHoveredSegment();
+			if (!timeScrubberState.isDragging && !timeScrubberState.isOverviewDragging) setTimeScrubberActive(false);
+		});
+		timeScrubberSegmentCanvas?.addEventListener("click", (event) => {
+			if (!timeScrubberState.enabled) return;
+			event.preventDefault();
+			hideTimeScrubberContextMenu();
+			setTimeScrubberActive(true);
+			selectTimeScrubberSegmentFromClientPoint(event.clientX, event.clientY);
 		});
 		timeScrubberOverviewCanvas.addEventListener("pointerdown", (event) => {
 			if (!timeScrubberState.enabled || !timeScrubberState.allPoints.length) return;
@@ -418,11 +568,31 @@
 		});
 		document.addEventListener("click", (event) => {
 			if (!timeScrubberContextMenuState.open) return;
-			if (timeScrubberContextMenu.contains(event.target)) return;
-			hideTimeScrubberContextMenu();
+			if (!timeScrubberContextMenu.contains(event.target)) hideTimeScrubberContextMenu();
+		});
+		document.addEventListener("click", (event) => {
+			if (!trackEditState.contextMenuOpen) return;
+			if (trackEditContextMenu?.contains(event.target)) return;
+			closeTrackEditContextMenu();
+		});
+		document.addEventListener("click", (event) => {
+			if (!trackEditState.saveMenuOpen) return;
+			if (trackEditSaveMenu?.contains(event.target)) return;
+			if (trackEditSaveOptionsButton?.contains(event.target)) return;
+			closeTrackEditSaveMenu();
+			renderTrackEditPanel();
 		});
 		document.addEventListener("keydown", (event) => {
 			if (event.key === "Escape") {
+				if (trackEditState.saveMenuOpen) {
+					closeTrackEditSaveMenu();
+					renderTrackEditPanel();
+					return;
+				}
+				if (trackEditState.contextMenuOpen) {
+					closeTrackEditContextMenu();
+					return;
+				}
 				if (segmentDraftState.active) {
 					cancelTimelineSegmentDraft();
 					return;
@@ -439,6 +609,10 @@
 					closeAnnotationSettings();
 					return;
 				}
+				if (mapToolsOpen) {
+					setMapToolsOpen(false);
+					return;
+				}
 				hideTimeScrubberContextMenu();
 				return;
 			}
@@ -446,7 +620,20 @@
 			if (document.getElementById("reviewer-session-overlay").classList.contains("open")) return;
 			if (studioManagementOverlay.classList.contains("open")) return;
 			if (annotationSettingsOverlay.classList.contains("open")) return;
-			if (!isKeyboardTargetBlockingReviewShortcuts(event.target) && handleReviewShortcutKeyboardEvent(event)) return;
+			if (
+				trackEditState.enabled
+				&& (event.code === "Space" || event.key === " ")
+				&& !event.metaKey
+				&& !event.ctrlKey
+				&& !event.altKey
+				&& !isKeyboardTargetBlockingReviewShortcuts(event.target)
+			) {
+				event.preventDefault();
+				event.stopPropagation();
+				setTrackEditSpaceModifierActive(true);
+				return;
+			}
+			if (!trackEditState.enabled && !isKeyboardTargetBlockingReviewShortcuts(event.target) && handleReviewShortcutKeyboardEvent(event)) return;
 			if (event.metaKey || event.ctrlKey || event.altKey) return;
 			if (isEditableKeyboardTarget(event.target)) return;
 			if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -455,6 +642,18 @@
 			event.preventDefault();
 			event.stopPropagation();
 			setTimeScrubberActive(true);
+		});
+		document.addEventListener("keyup", (event) => {
+			if (event.code !== "Space" && event.key !== " ") return;
+			if (!trackEditState.enabled && !trackEditState.spaceModifierActive) return;
+			if (!trackEditState.spaceModifierActive) return;
+			event.preventDefault();
+			event.stopPropagation();
+			setTrackEditSpaceModifierActive(false);
+		});
+		window.addEventListener("blur", () => {
+			if (!trackEditState.spaceModifierActive) return;
+			setTrackEditSpaceModifierActive(false);
 		});
 		annotationSettingsEntry.addEventListener("click", () => {
 			if (currentUiConfig.annotationEnabled === false) return;
@@ -465,11 +664,18 @@
 			if (event.target === annotationSettingsOverlay) closeAnnotationSettings();
 		});
 		studioManagementEntry.addEventListener("click", () => {
-			if (studioManagementOverlay.classList.contains("open")) {
+			if (studioManagementOverlay.classList.contains("open") && studioManagementState.exportActiveWorkspace === "upload") {
 				closeStudioManagement();
 				return;
 			}
-			openStudioManagement();
+			openStudioManagement("upload");
+		});
+		studioExportEntry?.addEventListener("click", () => {
+			if (studioManagementOverlay.classList.contains("open") && studioManagementState.exportActiveWorkspace === "export") {
+				closeStudioManagement();
+				return;
+			}
+			openStudioManagement("export");
 		});
 		studioManagementClose.addEventListener("click", () => closeStudioManagement());
 		studioManagementOverlay.addEventListener("click", (event) => {
@@ -480,7 +686,7 @@
 		});
 		studioManagementRefreshBtn.addEventListener("click", () => {
 			if (studioManagementState.busy) return;
-			void loadStudioManagementUploads().catch((error) => {
+			void syncStudioManagementData().catch((error) => {
 				setStudioManagementFlash("error", String(error?.message || error));
 			});
 		});
@@ -526,6 +732,36 @@
 			void submitStudioManagementUpload({ processAfterUpload: true });
 		});
 		studioManagementResetBtn.addEventListener("click", () => resetStudioManagementForm());
+		studioExportBatchSelect?.addEventListener("change", () => {
+			studioManagementState.exportSelectedBatch = String(studioExportBatchSelect.value || "").trim();
+			studioManagementState.exportSelectedUid = "";
+			studioManagementState.exportSelectedTag = "";
+			void loadStudioExportReviews().catch((error) => {
+				setStudioExportSummary(String(error?.message || error), "error");
+			});
+		});
+		studioExportUidSelect?.addEventListener("change", () => {
+			studioManagementState.exportSelectedUid = String(studioExportUidSelect.value || "").trim();
+		});
+		studioExportTagSelect?.addEventListener("change", () => {
+			studioManagementState.exportSelectedTag = String(studioExportTagSelect.value || "").trim();
+		});
+		studioExportDownloadBtn?.addEventListener("click", () => {
+			void submitStudioExportDownload();
+		});
+		studioExportDatasetBtn?.addEventListener("click", () => {
+			void submitStudioExportAction({ exportMode: "segment_label_dataset" });
+		});
+		const studioExportTimestampUnitGroup = document.getElementById("studio-export-timestamp-unit-group");
+		studioExportTimestampUnitGroup?.addEventListener("click", (event) => {
+			const btn = event.target?.closest?.("[data-studio-export-timestamp-unit]");
+			if (!btn || !studioExportTimestampUnitGroup.contains(btn)) return;
+			studioExportTimestampUnitGroup.querySelectorAll("[data-studio-export-timestamp-unit]").forEach((node) => {
+				const active = node === btn;
+				node.classList.toggle("active", active);
+				node.setAttribute("aria-pressed", active ? "true" : "false");
+			});
+		});
 		studioManagementUploadsList.addEventListener("click", (event) => {
 			const actionButton = event.target.closest("button[data-studio-action]");
 			if (!actionButton || studioManagementState.busy) return;
@@ -598,6 +834,15 @@
 			annotationSettings.idleOpacity = Math.max(0.5, Math.min(annotationSettings.focusOpacity, parseNumericValue(event.target.value) ?? annotationSettings.idleOpacity));
 			persistAnnotationSettings();
 			applyAnnotationUiSettings();
+		});
+		annotationExclusiveModeInput?.addEventListener("change", (event) => {
+			annotationSettings.exclusiveSegments = !!event.target.checked;
+			persistAnnotationSettings();
+			if (typeof saveCurrentTimelineSegments === "function") {
+				saveCurrentTimelineSegments(getCurrentTimelineSegments());
+			}
+			applyAnnotationUiSettings();
+			renderTimeScrubberControl();
 		});
 		const dateWindowControl = document.getElementById("date-window-control");
 		const dateWindowStart = document.getElementById("date-window-start");
@@ -769,6 +1014,7 @@
 		sidebarEl.style.maxWidth = sidebarWidth + "px";
 		applyThemeMode(themeMode, { persist: false });
 		renderReviewerIdentity();
+		renderTrackEditPanel();
 		renderReviewAggregatePanel(null);
 		resetStudioManagementForm();
 		renderStudioManagementActor();
@@ -777,6 +1023,7 @@
 
 		(async function init() {
 			initMap();
+			renderBasemapModeControls();
 			applyManifestUiConfig(null);
 			applyAnnotationUiSettings();
 			renderLayerControls({});

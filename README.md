@@ -110,6 +110,48 @@ python3 web/review_server.py \
   --batches-root /path/to/shared/batches
 ```
 
+## Agent-Native CLI
+
+仓库现在有一条与 GUI 并行的 agent-friendly CLI 入口：
+
+```bash
+cd /Users/ocean/Documents/Playground/Cellular-projects
+python3 -m trajectory_annotation_studio.scripts.studio_agent_cli --help
+```
+
+或者在安装了 console script 之后：
+
+```bash
+studio-agent --help
+```
+
+这条入口适合：
+
+- agent / 自动化读 `sample` 上下文
+- 写 `review` / `timeline`
+- 批量发现并写入 `subway / low_speed / road / stay / flight / railway` 候选分段
+- 导 `aggregate` / `reviewer bundle`
+- 开发期做 `dev roundtrip` smoke
+
+快速例子：
+
+```bash
+python3 -m trajectory_annotation_studio.scripts.studio_agent_cli \
+  --base-url http://127.0.0.1:8016 \
+  batch list
+
+python3 -m trajectory_annotation_studio.scripts.studio_agent_cli \
+  --base-url http://127.0.0.1:8016 \
+  --batch my_batch \
+  sample inspect --uid 6001
+```
+
+详细设计与 ten-day 示例见：
+
+- [docs/29-agent-native-cli.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/29-agent-native-cli.md)
+
+后续 agent 接手时，优先从该文档的「Agent 快速上手」开始：先连同一个 `review_server`，再用独立 reviewer id 写 `review/timeline`，最后回到 GUI 的「多人标注汇总」验证可回放。
+
 ## 默认预览流程
 
 现在推荐把 `trajectory_annotation_studio` 直接挂到共享的 `review_batches/` 根目录，而不是手动改 `result-root`。
@@ -139,32 +181,27 @@ python3 scripts/start_review_studio.py --port 8016
 
 ## 文档入口
 
-- [docs/README.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/README.md)
-  总索引
-- [docs/04-当前落成情况.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/04-%E5%BD%93%E5%89%8D%E8%90%BD%E6%88%90%E6%83%85%E5%86%B5.md)
-  当前已经落成了什么、哪些边界还没做
-- [docs/05-组内共享部署与数据接入规范.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/05-%E7%BB%84%E5%86%85%E5%85%B1%E4%BA%AB%E9%83%A8%E7%BD%B2%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%8E%A5%E5%85%A5%E8%A7%84%E8%8C%83.md)
-  批次目录、输入格式、输出位置
-- [docs/06-后台逻辑与存储说明.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/06-%E5%90%8E%E5%8F%B0%E9%80%BB%E8%BE%91%E4%B8%8E%E5%AD%98%E5%82%A8%E8%AF%B4%E6%98%8E.md)
-  review / reviewer namespace / timeline annotation / 左侧筛选逻辑
-- [docs/07-仓库治理与 GitHub-服务器协作.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/07-%E4%BB%93%E5%BA%93%E6%B2%BB%E7%90%86%E4%B8%8E%20GitHub-%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%8D%8F%E4%BD%9C.md)
-  代码仓、服务器、权限、发布流程
-- [docs/08-reviewer-命名空间与多人标注汇总设计.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/08-reviewer-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E4%B8%8E%E5%A4%9A%E4%BA%BA%E6%A0%87%E6%B3%A8%E6%B1%87%E6%80%BB%E8%AE%BE%E8%AE%A1.md)
-  reviewer session、多人汇总与导出设计
-- [docs/09-reviewer-命名空间开发与验证计划.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/09-reviewer-%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E5%BC%80%E5%8F%91%E4%B8%8E%E9%AA%8C%E8%AF%81%E8%AE%A1%E5%88%92.md)
-  reviewer namespace 功能实施与验证计划
-- [docs/14-179部署指南.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/14-179%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97.md)
-  面向 179 的首次部署步骤
-- [docs/15-179详细操作手册.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/15-179%E8%AF%A6%E7%BB%86%E6%93%8D%E4%BD%9C%E6%89%8B%E5%86%8C.md)
-  operator 日常运行与首轮批次发布操作
-- [docs/16-快速接入指南.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/16-%E5%BF%AB%E9%80%9F%E6%8E%A5%E5%85%A5%E6%8C%87%E5%8D%97.md)
-  接入者最小必读文档
-- [docs/17-179首轮真实试运行记录.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/17-179%E9%A6%96%E8%BD%AE%E7%9C%9F%E5%AE%9E%E8%AF%95%E8%BF%90%E8%A1%8C%E8%AE%B0%E5%BD%95.md)
-  记录真实 179 试运行中暴露的约束、已验证路径和后续优化点
-- [docs/18-179试运行复盘与第二轮优化建议.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/18-179%E8%AF%95%E8%BF%90%E8%A1%8C%E5%A4%8D%E7%9B%98%E4%B8%8E%E7%AC%AC%E4%BA%8C%E8%BD%AE%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE.md)
-  把首轮真实试运行压成下一轮的执行清单，避免重复踩坑
-- [docs/20-阶段性仓库代码架构体检与治理升级方案.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/20-%E9%98%B6%E6%AE%B5%E6%80%A7%E4%BB%93%E5%BA%93%E4%BB%A3%E7%A0%81%E6%9E%B6%E6%9E%84%E4%BD%93%E6%A3%80%E4%B8%8E%E6%B2%BB%E7%90%86%E5%8D%87%E7%BA%A7%E6%96%B9%E6%A1%88.md)
-  当前这版阶段性体检、风险分级、治理机制和升级路线
+文档库现在按分类维护，不再把 `01-33` 当作主要阅读顺序。
+
+- [CURRENT.md](CURRENT.md)
+  当前事实源、活跃工作、风险和开放决策点
+- [docs/README.md](docs/README.md)
+  文档库根入口
+- [docs/INDEX.md](docs/INDEX.md)
+  一级分类索引：产品、前端 GUI、后端、CLI、Agent 实验、部署、治理和示例
+- [docs/DOCS_MAINTENANCE.md](docs/DOCS_MAINTENANCE.md)
+  文档维护机制，后续 agent 新增或修改文档前必须读
+- [AGENTS.md](AGENTS.md)
+  agent 启动包和本仓执行契约
+
+常用快速入口：
+
+- 接入者：看 [docs/16-快速接入指南.md](docs/16-快速接入指南.md)
+- 批次 / 后端合同：看 [docs/05-组内共享部署与数据接入规范.md](docs/05-组内共享部署与数据接入规范.md) 和 [docs/06-后台逻辑与存储说明.md](docs/06-后台逻辑与存储说明.md)
+- 前端 GUI 重构：看 [docs/22-index前端模块化重构方案.md](docs/22-index前端模块化重构方案.md)、[docs/23-index前端重构落地计划.md](docs/23-index前端重构落地计划.md) 和 [docs/28-轨迹编辑模式与严格分段导出技术规格.md](docs/28-轨迹编辑模式与严格分段导出技术规格.md)
+- Agent CLI / 实验：先看 [docs/33-agent-review-progressive-memory.md](docs/33-agent-review-progressive-memory.md)，再看 [docs/29-agent-native-cli.md](docs/29-agent-native-cli.md)
+- 测试 / 验证：看 [web/README.md](web/README.md) 和 [tests/](tests/)
+- 部署与离线交付：看 [docs/14-179部署指南.md](docs/14-179部署指南.md)、[docs/15-179详细操作手册.md](docs/15-179详细操作手册.md) 和 [deploy/docker/README.offline.md](deploy/docker/README.offline.md)
 
 ## 当前 reviewer 命名空间模型
 
@@ -237,7 +274,8 @@ python3 scripts/migrate_legacy_review_namespace.py --review-root /path/to/batch/
 
 ```bash
 cd /Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio
-python3 -m unittest web.test_review_lib web.test_review_server scripts.tests.test_server_batch_tools scripts.tests.test_research_arena_v15_layer_adapter scripts.tests.test_adapter_template
+python3 scripts/check_docs_entrypoints.py
+python3 -m unittest web.test_review_lib web.test_review_server scripts.tests.test_check_docs_entrypoints scripts.tests.test_server_batch_tools scripts.tests.test_research_arena_v15_layer_adapter scripts.tests.test_adapter_template
 python3 scripts/check_index_html_inline_js.py
 ```
 

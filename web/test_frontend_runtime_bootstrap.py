@@ -79,9 +79,13 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 					this.dataset = {{}};
 					this.disabled = false;
 					this.checked = false;
+					this.hidden = false;
 					this.className = "";
 					this.attributes = {{}};
 					this.listeners = {{}};
+					this.children = [];
+					this.parentNode = null;
+					this.isContentEditable = false;
 					this.files = [];
 					this.title = "";
 					this.placeholder = "";
@@ -89,6 +93,8 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 					this.clientHeight = 80;
 					this.offsetWidth = 800;
 					this.offsetHeight = 80;
+					this.scrollTop = 0;
+					this.scrollLeft = 0;
 					this.style = {{
 						setProperty(key, value) {{
 							this[key] = value;
@@ -108,10 +114,25 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 				getAttribute(name) {{
 					return this.attributes[name];
 				}}
+				appendChild(child) {{
+					if (!child) return child;
+					child.parentNode = this;
+					this.children.push(child);
+					return child;
+				}}
 				contains(target) {{
-					return target === this;
+					return target === this || this.children.includes(target);
 				}}
 				closest(selector) {{
+					if (String(selector || "").includes("input") && this.tagName === "INPUT") return this;
+					if (String(selector || "").includes("textarea") && this.tagName === "TEXTAREA") return this;
+					if (String(selector || "").includes("select") && this.tagName === "SELECT") return this;
+					if (String(selector || "").includes("button") && this.tagName === "BUTTON") return this;
+					if (String(selector || "").includes("label") && this.tagName === "LABEL") return this;
+					if (String(selector || "").includes("a") && this.tagName === "A") return this;
+					if (String(selector || "").includes("[role='button']") && this.attributes.role === "button") return this;
+					if (String(selector || "").includes("[role='menuitem']") && this.attributes.role === "menuitem") return this;
+					if (String(selector || "").includes("[contenteditable") && this.isContentEditable) return this;
 					if (selector === ".triage-card[data-uid]" && this.dataset.uid) return this;
 					if (selector === ".load-more-btn[data-column]" && this.dataset.column) return this;
 					if (selector === ".triage-tab[data-column]" && this.dataset.column) return this;
@@ -136,6 +157,10 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 				}}
 				getBoundingClientRect() {{
 					return {{ left: 0, top: 0, width: 800, height: 80 }};
+				}}
+				scrollTo(options = {{}}) {{
+					this.scrollTop = Number(options.top || 0);
+					this.scrollLeft = Number(options.left || 0);
 				}}
 				getContext() {{
 					return {{
@@ -164,6 +189,21 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 				focus() {{
 					document.activeElement = this;
 				}}
+				click() {{
+					for (const handler of this.listeners.click || []) {{
+						handler({{
+							target: this,
+							currentTarget: this,
+							preventDefault() {{}},
+							stopPropagation() {{}},
+						}});
+					}}
+				}}
+				remove() {{
+					if (!this.parentNode) return;
+					this.parentNode.children = this.parentNode.children.filter((child) => child !== this);
+					this.parentNode = null;
+				}}
 				select() {{}}
 				setPointerCapture() {{}}
 				releasePointerCapture() {{}}
@@ -188,9 +228,14 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 
 			const document = {{
 				body: new ElementMock("body", "body"),
+				documentElement: {{ clientWidth: 1280, clientHeight: 720 }},
 				activeElement: null,
+				listeners: {{}},
 				getElementById(id) {{
 					return getElement(id);
+				}},
+				createElement(tag) {{
+					return new ElementMock("", tag);
 				}},
 				querySelectorAll(selector) {{
 					if (selector === ".review-decision-btn") return reviewDecisionButtons;
@@ -228,7 +273,9 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 					if (selector === "#annotation-tag-list .annotation-tag-name") return [];
 					return [];
 				}},
-				addEventListener() {{}},
+				addEventListener(type, handler) {{
+					(this.listeners[type] ||= []).push(handler);
+				}},
 			}};
 
 			const localStorageStore = new Map();
@@ -253,7 +300,9 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 							if (target && typeof target.addLayer === "function") target.addLayer(this);
 							return this;
 						}},
-						bindPopup() {{
+						bindPopup(content) {{
+							this._popupBound = true;
+							this._popupContent = content;
 							return this;
 						}},
 						bindTooltip(content) {{
@@ -299,13 +348,39 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 				return output;
 			}}
 
+			function makeMapHandler() {{
+				return {{
+					enabledState: true,
+					enable() {{
+						this.enabledState = true;
+					}},
+					disable() {{
+						this.enabledState = false;
+					}},
+				}};
+			}}
+
 			const mapMock = {{
 				_layers: new Set(),
 				_zoom: 11,
+				_center: {{ lat: 39.9, lng: 116.4 }},
 				lastPanTarget: null,
+				dragging: makeMapHandler(),
+				scrollWheelZoom: makeMapHandler(),
+				boxZoom: makeMapHandler(),
+				doubleClickZoom: makeMapHandler(),
+				touchZoom: makeMapHandler(),
 				on() {{}},
 				getZoom() {{
 					return this._zoom;
+				}},
+				getCenter() {{
+					return this._center;
+				}},
+				setView(latlng, zoom) {{
+					this._center = {{ lat: latlng[0], lng: latlng[1] }};
+					if (typeof zoom === "number") this._zoom = zoom;
+					return this;
 				}},
 				getContainer() {{
 					return getElement("map");
@@ -324,16 +399,23 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 				}},
 				panTo(latlng) {{
 					this.lastPanTarget = latlng;
+					this._center = {{ lat: latlng[0], lng: latlng[1] }};
 				}},
 				invalidateSize() {{}},
 			}};
 
 			const L = {{
-				map() {{
+				map(_id, options = {{}}) {{
+					if (Array.isArray(options.center) && options.center.length >= 2) {{
+						mapMock._center = {{ lat: options.center[0], lng: options.center[1] }};
+					}}
+					if (typeof options.zoom === "number") {{
+						mapMock._zoom = options.zoom;
+					}}
 					return mapMock;
 				}},
-				tileLayer() {{
-					return makeLayer();
+				tileLayer(url, options) {{
+					return makeLayer({{ url, options }});
 				}},
 				control: {{
 					scale() {{
@@ -465,11 +547,26 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 				current_batch: selectedBatchName,
 				batches: batchFixtures,
 			}};
+			const trackEditsStore = new Map();
+			const trackEditFetchFailureState = {{
+				getStoreKeys: new Set(),
+				postStoreKeys: new Set(),
+			}};
 
 			async function fetchMock(rawUrl, options = {{}}) {{
 				const method = String(options.method || "GET").toUpperCase();
 				const url = new URL(String(rawUrl), "http://localhost");
 				if (url.pathname === "/api/batches") return responseFor(200, currentBatchPayload);
+				if (url.pathname === "/api/me") {{
+					return responseFor(200, {{
+						actor: {{
+							actor_id: "runtime-harness",
+							display_name: "Runtime Harness",
+							role: "annotator",
+						}},
+					}});
+				}}
+				if (url.pathname === "/api/uploads") return responseFor(200, {{ uploads: [], items: [] }});
 				if (url.pathname === "/api/reviewers") return responseFor(200, {{ reviewers: [] }});
 				if (url.pathname === "/api/reviews") {{
 					if (url.searchParams.get("uid")) return responseFor(200, {{ review: null }});
@@ -477,6 +574,68 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 				}}
 				if (url.pathname === "/api/reviews/aggregate") return responseFor(200, {{ aggregate: null }});
 				if (url.pathname === "/api/timeline-annotations") return responseFor(200, {{ annotations: {{ pins: [], segments: [] }} }});
+				if (url.pathname === "/api/export/reviewer-bundle") {{
+					const payload = JSON.parse(String(options.body || "{{}}"));
+					const isDatasetExport = String(payload.export_mode || "").trim().toLowerCase() === "segment_label_dataset";
+					if (isDatasetExport) {{
+						await new Promise((resolve) => setTimeout(resolve, 40));
+					}}
+					return responseFor(200, {{
+						bundle_name: payload.bundle_name || "runtime_export_bundle",
+						download_name: `${{payload.bundle_name || "runtime_export_bundle"}}.zip`,
+						download_url: "/downloads/runtime_export_bundle.zip",
+						sample_count: 3,
+						export_mode: isDatasetExport ? "segment_label_dataset" : "reviewer_bundle",
+						reviewer_profile: {{
+							reviewer_id: payload.reviewer_id || "runtime-agent",
+						}},
+					}});
+				}}
+				if (url.pathname === "/api/track-edits") {{
+					const reviewerId = url.searchParams.get("reviewer_id") || "";
+					const uid = url.searchParams.get("uid") || "";
+					const requestPayload = method === "POST"
+						? JSON.parse(String(options.body || "{{}}"))
+						: null;
+					const effectiveReviewerId = reviewerId || String(requestPayload?.reviewer_id || "");
+					const effectiveUid = uid || String(requestPayload?.uid || requestPayload?.sample_id || "");
+					const storeKey = `${{effectiveReviewerId}}::${{effectiveUid}}`;
+					if (method === "GET" && trackEditFetchFailureState.getStoreKeys.has(storeKey)) {{
+						trackEditFetchFailureState.getStoreKeys.delete(storeKey);
+						return responseFor(500, {{ error: "forced get failure" }});
+					}}
+					if (method === "POST" && trackEditFetchFailureState.postStoreKeys.has(storeKey)) {{
+						trackEditFetchFailureState.postStoreKeys.delete(storeKey);
+						return responseFor(500, {{ error: "forced post failure" }});
+					}}
+					if (method === "GET") {{
+						return responseFor(200, {{
+							track_edits: trackEditsStore.get(storeKey) || {{
+								schema_version: 1,
+								uid: effectiveUid,
+								sample_id: effectiveUid,
+								reviewer_id: effectiveReviewerId,
+								reviewer_name: effectiveReviewerId,
+								patches: [],
+								updated_at: "",
+							}},
+						}});
+					}}
+					if (method === "POST") {{
+						const payload = requestPayload || {{}};
+						const nextRecord = {{
+							schema_version: 1,
+							uid: payload.uid || payload.sample_id || "",
+							sample_id: payload.sample_id || payload.uid || "",
+							reviewer_id: payload.reviewer_id || effectiveReviewerId,
+							reviewer_name: payload.reviewer_name || payload.reviewer_id || effectiveReviewerId,
+							patches: Array.isArray(payload.patches) ? payload.patches : [],
+							updated_at: "2026-04-27T12:34:56Z",
+						}};
+						trackEditsStore.set(`${{nextRecord.reviewer_id}}::${{nextRecord.uid}}`, nextRecord);
+						return responseFor(200, {{ track_edits: nextRecord }});
+					}}
+				}}
 				const batchPrefixMatch = url.pathname.match(/^\\/batch-data\\/([^/]+)\\/(.+)$/);
 				if (batchPrefixMatch) {{
 					const [, batchName, relative] = batchPrefixMatch;
@@ -534,26 +693,64 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 			context.window.document = document;
 			context.window.localStorage = localStorage;
 			context.window.fetch = fetchMock;
+			context.window.innerWidth = 1280;
+			context.window.innerHeight = 720;
 			context.window.Papa = context.Papa;
 			context.window.L = L;
 			context.window.console = console;
-			context.window.addEventListener = () => {{}};
-			context.document.addEventListener = () => {{}};
+			const windowEventListeners = {{}};
+			context.window.addEventListener = (type, handler) => {{
+				(windowEventListeners[type] ||= []).push(handler);
+			}};
+			context.document.addEventListener = document.addEventListener.bind(document);
+
+			function dispatchDocumentEvent(type, payload = {{}}) {{
+				for (const handler of document.listeners[type] || []) {{
+					handler(Object.assign({{
+						type,
+						target: document.body,
+						currentTarget: document,
+						defaultPrevented: false,
+						preventDefault() {{ this.defaultPrevented = true; }},
+						stopPropagation() {{}},
+					}}, payload));
+				}}
+			}}
+
+			function dispatchWindowEvent(type, payload = {{}}) {{
+				for (const handler of windowEventListeners[type] || []) {{
+					handler(Object.assign({{
+						type,
+						target: context.window,
+						currentTarget: context.window,
+					}}, payload));
+				}}
+			}}
 
 			[
 				"search-box","batch-select","save-review-btn","refresh-review-btn","reviewer-open-session-btn","reviewer-switch-btn",
 				"reviewer-session-cancel","reviewer-session-submit","reviewer-session-input","reviewer-session-known","reviewer-session-overlay",
 				"reference-source-input","review-tag-select","review-notes","status-filter-row","filter-mode","filter-toggle-btn",
 				"review-aggregate-toggle","review-panel-toggle","prev-pending-btn","next-pending-btn","triage-board","triage-column-tabs",
-				"map-tools-toggle","map-view-follow-cb","time-plus8-cb","time-scrubber-control","time-scrubber-canvas","time-scrubber-overview-canvas",
+				"basemap-mode-controls","basemap-mode-status",
+				"map-tools-toggle","map-view-follow-cb","time-plus8-cb","review-mode-annotation-btn",
+				"track-edit-panel","track-edit-toggle","track-edit-clear-selection","track-edit-undo-btn","track-edit-redo-btn",
+				"track-edit-save-btn","track-edit-save-options-btn","track-edit-save-menu","track-edit-save-overwrite",
+				"track-edit-save-download","track-edit-show-coordinates","track-edit-coordinate-summary",
+				"track-edit-status","track-edit-selection","track-edit-context-menu","track-edit-context-title",
+				"track-edit-context-subtitle","track-edit-context-field-label","track-edit-context-value",
+				"track-edit-context-apply","track-edit-context-close","time-scrubber-control","time-scrubber-canvas","time-scrubber-overview-canvas",
 				"time-scrubber-layer-select","time-scrubber-step-prev","time-scrubber-step-next","time-scrubber-left","time-scrubber-right",
 				"time-scrubber-zoom-out","time-scrubber-zoom-in","time-scrubber-context-menu","annotation-settings-entry",
 				"annotation-settings-overlay","annotation-settings-close","annotation-category-add","annotation-tag-add",
-				"annotation-focus-opacity","annotation-idle-opacity","studio-management-entry","studio-management-overlay",
+				"annotation-focus-opacity","annotation-idle-opacity","studio-management-entry","studio-export-entry","studio-management-overlay",
+				"studio-management-body","studio-management-sidebar","studio-upload-section","studio-export-section",
 				"studio-management-close","studio-management-refresh-btn","studio-management-upload-btn",
 				"studio-management-upload-process-btn","studio-management-reset-btn","studio-management-uploads-list",
 				"studio-management-upload-type","studio-management-custom-fields-toggle","studio-management-custom-fields",
 				"studio-management-help-anchor","studio-management-help-trigger","theme-mode-toggle","theme-mode-label",
+				"studio-export-batch-select","studio-export-uid-select","studio-export-tag-select","studio-export-download-btn",
+				"studio-export-summary","studio-export-decision-group","studio-export-decision-accept","studio-export-decision-reject","studio-export-decision-skip",
 				"date-window-control","date-window-start","date-window-end",
 				"date-window-start-decrease","date-window-start-increase","date-window-end-decrease","date-window-end-increase",
 				"date-window-fixed-span","date-window-quick-category","date-window-quick-toggle","help-panel","help-toggle-btn",
@@ -569,8 +766,13 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 				"studio-management-actor-role","studio-management-upload-count","studio-management-last-refresh","batch-status",
 				"filter-status","triage-board-summary","map","map-tools-dock",
 			].forEach(getElement);
+			getElement("track-edit-save-menu").appendChild(getElement("track-edit-save-overwrite"));
+			getElement("track-edit-save-menu").appendChild(getElement("track-edit-save-download"));
 			getElement("time-plus8-cb").checked = true;
 			getElement("filter-mode").value = "any";
+			getElement("studio-export-decision-accept").checked = true;
+			getElement("studio-export-decision-reject").checked = true;
+			getElement("studio-export-decision-skip").checked = true;
 
 			for (const relativePath of localScripts) {{
 				const absolutePath = path.join(projectRoot, relativePath);
@@ -738,6 +940,524 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 					if (switchedLayerCount <= 0) throw new Error("batch switch did not render any trajectory layers");
 				}}
 
+				const studioExportEntryEl = getElement("studio-export-entry");
+				const studioUploadEntryEl = getElement("studio-management-entry");
+				for (const handler of studioExportEntryEl.listeners.click || []) {{
+					await handler({{
+						target: studioExportEntryEl,
+						currentTarget: studioExportEntryEl,
+						preventDefault() {{}},
+						stopPropagation() {{}},
+					}});
+				}}
+				await new Promise((resolve) => setTimeout(resolve, 20));
+				const studioExportState = vm.runInContext(`({{
+					open: document.getElementById("studio-management-overlay").classList.contains("open"),
+					activeWorkspace: studioManagementState.exportActiveWorkspace,
+					selectedBatch: studioManagementState.exportSelectedBatch,
+					uploadHidden: !!document.getElementById("studio-upload-section").hidden,
+					exportHidden: !!document.getElementById("studio-export-section").hidden
+				}})`, context);
+				if (!studioExportState.open || studioExportState.activeWorkspace !== "export") {{
+					throw new Error("studio export entry did not open export workspace");
+				}}
+				if (studioExportState.selectedBatch !== vm.runInContext("currentBatchName", context)) {{
+					throw new Error("studio export workspace did not default to current batch");
+				}}
+				if (!studioExportState.uploadHidden || studioExportState.exportHidden) {{
+					throw new Error("studio workspaces are not mutually exclusive in export mode");
+				}}
+
+				for (const handler of studioUploadEntryEl.listeners.click || []) {{
+					await handler({{
+						target: studioUploadEntryEl,
+						currentTarget: studioUploadEntryEl,
+						preventDefault() {{}},
+						stopPropagation() {{}},
+					}});
+				}}
+				await new Promise((resolve) => setTimeout(resolve, 20));
+				const studioUploadState = vm.runInContext(`({{
+					open: document.getElementById("studio-management-overlay").classList.contains("open"),
+					activeWorkspace: studioManagementState.exportActiveWorkspace,
+					selectedBatch: studioManagementState.exportSelectedBatch,
+					uploadHidden: !!document.getElementById("studio-upload-section").hidden,
+					exportHidden: !!document.getElementById("studio-export-section").hidden
+				}})`, context);
+				if (!studioUploadState.open || studioUploadState.activeWorkspace !== "upload") {{
+					throw new Error("studio upload entry did not switch back to upload workspace");
+				}}
+				if (studioUploadState.selectedBatch !== vm.runInContext("currentBatchName", context)) {{
+					throw new Error("studio upload workspace did not preserve current batch default");
+				}}
+					if (studioUploadState.uploadHidden || !studioUploadState.exportHidden) {{
+						throw new Error("studio workspaces are not mutually exclusive in upload mode");
+					}}
+					vm.runInContext("closeStudioManagement()", context);
+
+					const currentUidBeforeExclusiveCheck = vm.runInContext("currentUid", context);
+					vm.runInContext(`
+						currentReviewerSession = {{
+							reviewer_id: "runtime-agent",
+							reviewer_name: "Runtime Agent",
+							display_name: "Runtime Agent",
+						}};
+					`, context);
+					const trackEditLayer = vm.runInContext(`
+						Object.keys(trackEditState.pointIdsByLayer || {{}}).find(
+							(layer) => Array.isArray(trackEditState.pointIdsByLayer[layer]) && trackEditState.pointIdsByLayer[layer].length >= 3
+						) || Object.keys(trackEditState.pointIdsByLayer || {{}})[0] || ""
+					`, context);
+					let trackEditModeState = null;
+					let trackEditSelection = [];
+					let trackEditPatchCount = 0;
+					let trackEditPatchedLatitude = null;
+					let trackEditPatchedFieldValue = "";
+					let trackEditUndoDepth = 0;
+					let trackEditRedoDepth = 0;
+					let trackEditCoordinateSummary = "";
+					let trackEditCoordinateSummaryVisible = false;
+					let trackEditSaveMenuOpened = false;
+					let trackEditSaveMenuClosed = false;
+					let trackEditSpaceInputGuard = false;
+					let trackEditSpaceSelectGuard = null;
+					let trackEditSpaceActiveState = null;
+					let trackEditSpaceReleasedState = null;
+					let trackEditUndoPatchCount = 0;
+					let trackEditRedoPatchCount = 0;
+					let trackEditSaveState = null;
+					let trackEditDownloadFilename = "";
+					let trackEditAnnotationModeState = null;
+					let trackEditDragState = null;
+					let trackEditPopupSuppressed = null;
+					let trackEditReviewShortcutGuard = null;
+					let trackEditRevertState = null;
+					let trackEditSaveFailureState = null;
+					let trackEditReviewerIsolationState = null;
+					let trackEditNoReviewerGateState = null;
+					let datasetExportPendingState = null;
+					let datasetExportCompletedState = null;
+					let datasetExportSettledState = null;
+					if (trackEditLayer) {{
+						context.__trackEditLayer = trackEditLayer;
+						const trackEditPointIds = JSON.parse(
+							vm.runInContext("JSON.stringify((trackEditState.pointIdsByLayer[__trackEditLayer] || []).slice(0, 3))", context)
+						);
+						context.__trackEditPointIds = trackEditPointIds;
+						if (trackEditPointIds.length) {{
+							vm.runInContext("setTrackEditModeEnabled(true)", context);
+							trackEditModeState = JSON.parse(vm.runInContext(`JSON.stringify({{
+								enabled: trackEditState.enabled,
+								editPressed: document.getElementById("track-edit-toggle").getAttribute("aria-pressed"),
+								annotationPressed: document.getElementById("review-mode-annotation-btn").getAttribute("aria-pressed"),
+								mapLocked: document.getElementById("map").classList.contains("track-edit-map-locked"),
+								draggingEnabled: !!map.dragging.enabledState,
+								scrollWheelEnabled: !!map.scrollWheelZoom.enabledState
+							}})`, context));
+							trackEditPopupSuppressed = JSON.parse(vm.runInContext(`JSON.stringify((() => {{
+								const markerIds = Object.keys(trackEditState.renderedMarkersByPointId || {{}});
+								return {{
+									markerCount: markerIds.length,
+									hasPopup: markerIds.some((pointId) => !!trackEditState.renderedMarkersByPointId[pointId]?._popupBound),
+								}};
+							}})())`, context));
+							dispatchDocumentEvent("keydown", {{
+								key: "1",
+								code: "Digit1",
+								target: document.body,
+								metaKey: false,
+								ctrlKey: false,
+								altKey: false,
+								shiftKey: false,
+							}});
+							trackEditReviewShortcutGuard = JSON.parse(vm.runInContext(`JSON.stringify({{
+								selectedDecision,
+								reviewDirty: reviewFormDirty
+							}})`, context));
+							vm.runInContext("selectTrackEditPoint(__trackEditPointIds[0])", context);
+							if (trackEditPointIds.length >= 2) {{
+								vm.runInContext("selectTrackEditPoint(__trackEditPointIds[1], {{ toggle: true }})", context);
+							}}
+							if (trackEditPointIds.length >= 3) {{
+								vm.runInContext("selectTrackEditPoint(__trackEditPointIds[2], {{ range: true }})", context);
+							}}
+							trackEditSelection = JSON.parse(vm.runInContext("JSON.stringify(trackEditState.selectedPointIds)", context));
+							trackEditDragState = JSON.parse(vm.runInContext(`
+								JSON.stringify((() => {{
+									const selectedIds = (trackEditState.selectedPointIds || []).slice();
+									if (!selectedIds.length) return null;
+									const markerMap = {{}};
+									selectedIds.forEach((pointId) => {{
+										const pointRef = trackEditState.pointRefsById[pointId];
+										if (!pointRef?.position) return;
+										const [displayLat, displayLon] = toGcj(
+											pointRef.position.latitude,
+											pointRef.position.longitude,
+										);
+										const marker = L.marker([displayLat, displayLon], {{
+											draggable: true,
+											keyboard: false,
+										}});
+										bindTrackEditMarkerEvents(marker, pointRef);
+										markerMap[pointId] = marker;
+									}});
+									trackEditState.renderedMarkersByPointId = {{
+										...(trackEditState.renderedMarkersByPointId || {{}}),
+										...markerMap,
+									}};
+									const primaryId = selectedIds[0];
+									const primaryMarker = trackEditState.renderedMarkersByPointId[primaryId];
+									const secondaryMarker = selectedIds.length > 1
+										? trackEditState.renderedMarkersByPointId[selectedIds[1]]
+										: null;
+									const primaryBefore = primaryMarker?.getLatLng?.();
+									const secondaryBefore = secondaryMarker?.getLatLng?.() || null;
+									if (!primaryMarker || !primaryBefore) return null;
+									const deltaLat = 0.0012;
+									const deltaLon = 0.0014;
+									primaryMarker.fire("dragstart");
+									primaryMarker.setLatLng([primaryBefore.lat + deltaLat, primaryBefore.lng + deltaLon]);
+									primaryMarker.fire("drag");
+									const secondaryDuring = secondaryMarker?.getLatLng?.() || null;
+									primaryMarker.fire("dragend");
+									return {{
+										selectionCount: selectedIds.length,
+										patchCount: getCurrentTrackEdits().pointPatches.length,
+										dirty: trackEditState.dirty,
+										saveDisabled: !!document.getElementById("track-edit-save-btn").disabled,
+										dragSuppressActive: trackEditState.dragSuppressClickUntil > 0,
+										secondaryDeltaMatches: !secondaryBefore || !secondaryDuring
+											? true
+											: Math.abs((secondaryDuring.lat - secondaryBefore.lat) - deltaLat) <= 1e-9
+												&& Math.abs((secondaryDuring.lng - secondaryBefore.lng) - deltaLon) <= 1e-9,
+									}};
+								}})())
+							`, context));
+							trackEditRevertState = JSON.parse(vm.runInContext(`
+								JSON.stringify((() => {{
+									const revertPatches = (getCurrentTrackEdits().pointPatches || [])
+										.map((patch) => {{
+											const pointRef = trackEditState.pointRefsById[patch.pointId];
+											const baseRow = getBaseTrackEditRowForPatch(patch);
+											const baseCoord = getRowCoordinate(baseRow);
+											const metadata = {{}};
+											Object.keys(patch.metadata || {{}}).forEach((key) => {{
+												metadata[key] = String(baseRow?.[key] ?? "").trim();
+											}});
+											return buildTrackEditPatchFromRef(pointRef, {{
+												position: baseCoord ? {{
+													latitude: baseCoord.lat,
+													longitude: baseCoord.lon,
+												}} : undefined,
+												metadata: Object.keys(metadata).length ? metadata : undefined,
+											}});
+										}})
+										.filter(Boolean);
+									if (!revertPatches.length) return null;
+									upsertCurrentTrackEditPatches(revertPatches, {{
+										persist: false,
+										statusMessage: "runtime revert",
+										preserveScrubberTime: true,
+									}});
+									renderTrackEditPanel();
+									return {{
+										patchCount: getCurrentTrackEdits().pointPatches.length,
+										dirty: trackEditState.dirty,
+										saveDisabled: !!document.getElementById("track-edit-save-btn").disabled,
+										status: document.getElementById("track-edit-status").textContent || "",
+									}};
+								}})())
+							`, context));
+							const patchPayload = JSON.parse(vm.runInContext(`
+								JSON.stringify((() => {{
+									const pointId = __trackEditPointIds[0];
+									const pointRef = trackEditState.pointRefsById[pointId];
+									if (!pointRef) return null;
+									const metadataField = getTrackEditMetadataFieldForLayer(pointRef.layerKey);
+									const metadata = metadataField ? {{ [metadataField]: "road" }} : {{}};
+									upsertCurrentTrackEditPatches([
+										{{
+											pointId,
+											layerKey: pointRef.layerKey,
+											rowIndex: pointRef.rowIndex,
+											timestamp: pointRef.timestamp,
+											position: {{
+												latitude: (pointRef.position?.latitude || 0) + 0.0005,
+												longitude: (pointRef.position?.longitude || 0) + 0.0005,
+											}},
+											metadata,
+										}},
+									], {{
+										persist: false,
+										statusMessage: "runtime patch",
+										preserveScrubberTime: true,
+									}});
+									return {{
+										patchCount: getCurrentTrackEdits().pointPatches.length,
+										latitude: trackEditState.pointRefsById[pointId]?.position?.latitude ?? null,
+										fieldValue: metadataField ? (trackEditState.pointRefsById[pointId]?.row?.[metadataField] ?? "") : "",
+										undoDepth: trackEditState.undoStack.length,
+										redoDepth: trackEditState.redoStack.length,
+									}};
+								}})())
+							`, context));
+							trackEditPatchCount = patchPayload?.patchCount || 0;
+							trackEditPatchedLatitude = patchPayload?.latitude ?? null;
+							trackEditPatchedFieldValue = patchPayload?.fieldValue || "";
+							trackEditUndoDepth = patchPayload?.undoDepth || 0;
+							trackEditRedoDepth = patchPayload?.redoDepth || 0;
+							vm.runInContext("trackEditState.showCoordinates = true; renderTrackEditPanel();", context);
+							const coordinatePayload = JSON.parse(vm.runInContext(`JSON.stringify({{
+								summary: document.getElementById("track-edit-coordinate-summary").textContent || "",
+								hidden: !!document.getElementById("track-edit-coordinate-summary").hidden
+							}})`, context));
+							trackEditCoordinateSummary = coordinatePayload.summary || "";
+							trackEditCoordinateSummaryVisible = coordinatePayload.hidden === false;
+							vm.runInContext(`
+								openTrackEditSaveMenu(document.getElementById("track-edit-save-options-btn"));
+								renderTrackEditPanel();
+							`, context);
+							trackEditSaveMenuOpened = vm.runInContext(
+								'trackEditState.saveMenuOpen && document.getElementById("track-edit-save-options-btn").getAttribute("aria-expanded") === "true"',
+								context,
+							);
+							dispatchDocumentEvent("click", {{ target: document.body }});
+							trackEditSaveMenuClosed = vm.runInContext(
+								'!trackEditState.saveMenuOpen && document.getElementById("track-edit-save-options-btn").getAttribute("aria-expanded") === "false"',
+								context,
+							);
+							dispatchDocumentEvent("keydown", {{
+								key: " ",
+								code: "Space",
+								target: new ElementMock("", "input"),
+								metaKey: false,
+								ctrlKey: false,
+								altKey: false,
+							}});
+							trackEditSpaceInputGuard = vm.runInContext("trackEditState.spaceModifierActive === false", context);
+							const selectTarget = new ElementMock("", "button");
+							selectTarget.focus();
+							dispatchDocumentEvent("keydown", {{
+								key: " ",
+								code: "Space",
+								target: selectTarget,
+								metaKey: false,
+								ctrlKey: false,
+								altKey: false,
+							}});
+							trackEditSpaceSelectGuard = JSON.parse(vm.runInContext(`JSON.stringify({{
+								spaceModifierActive: trackEditState.spaceModifierActive,
+								overlayOpen: document.getElementById("studio-management-overlay").classList.contains("open"),
+								editEnabled: trackEditState.enabled,
+								activeElementTag: document.activeElement?.tagName || "",
+								draggingEnabled: !!map.dragging.enabledState,
+								scrollWheelEnabled: !!map.scrollWheelZoom.enabledState
+							}})`, context));
+							dispatchDocumentEvent("keyup", {{
+								key: " ",
+								code: "Space",
+								target: selectTarget,
+							}});
+							vm.runInContext("setTrackEditSpaceModifierActive(true)", context);
+							trackEditSpaceActiveState = JSON.parse(vm.runInContext(`JSON.stringify({{
+								spaceModifierActive: trackEditState.spaceModifierActive,
+								mapLocked: document.getElementById("map").classList.contains("track-edit-map-locked"),
+								draggingEnabled: !!map.dragging.enabledState,
+								scrollWheelEnabled: !!map.scrollWheelZoom.enabledState
+							}})`, context));
+							vm.runInContext("setTrackEditSpaceModifierActive(false)", context);
+							trackEditSpaceReleasedState = JSON.parse(vm.runInContext(`JSON.stringify({{
+								spaceModifierActive: trackEditState.spaceModifierActive,
+								mapLocked: document.getElementById("map").classList.contains("track-edit-map-locked"),
+								draggingEnabled: !!map.dragging.enabledState,
+								scrollWheelEnabled: !!map.scrollWheelZoom.enabledState
+							}})`, context));
+							vm.runInContext("undoTrackEditChange()", context);
+							trackEditUndoPatchCount = vm.runInContext("getCurrentTrackEdits().pointPatches.length", context);
+							vm.runInContext("redoTrackEditChange()", context);
+							trackEditRedoPatchCount = vm.runInContext("getCurrentTrackEdits().pointPatches.length", context);
+							await vm.runInContext("saveCurrentTrackEdits()", context);
+							trackEditSaveState = JSON.parse(vm.runInContext(`JSON.stringify({{
+								dirty: trackEditState.dirty,
+								lastSavedAt: trackEditState.lastSavedAt || "",
+								patchCount: getCurrentTrackEdits().pointPatches.length,
+								saveDisabled: !!document.getElementById("track-edit-save-btn").disabled
+							}})`, context));
+							vm.runInContext("downloadCurrentTrackEditsAsJson()", context);
+							trackEditDownloadFilename = vm.runInContext("window.__lastTrackEditDownloadFilename || ''", context);
+							vm.runInContext("setTrackEditModeEnabled(false)", context);
+							trackEditAnnotationModeState = JSON.parse(vm.runInContext(`JSON.stringify({{
+								enabled: trackEditState.enabled,
+								editPressed: document.getElementById("track-edit-toggle").getAttribute("aria-pressed"),
+								annotationPressed: document.getElementById("review-mode-annotation-btn").getAttribute("aria-pressed"),
+								mapLocked: document.getElementById("map").classList.contains("track-edit-map-locked"),
+								draggingEnabled: !!map.dragging.enabledState,
+								scrollWheelEnabled: !!map.scrollWheelZoom.enabledState
+							}})`, context));
+							vm.runInContext("setTrackEditModeEnabled(true)", context);
+							vm.runInContext(`
+								(() => {{
+									const pointId = __trackEditPointIds[0];
+									const pointRef = trackEditState.pointRefsById[pointId];
+									if (!pointRef) return;
+									upsertCurrentTrackEditPatches([
+										{{
+											pointId,
+											layerKey: pointRef.layerKey,
+											rowIndex: pointRef.rowIndex,
+											timestamp: pointRef.timestamp,
+											position: {{
+												latitude: (pointRef.position?.latitude || 0) + 0.0007,
+												longitude: (pointRef.position?.longitude || 0) + 0.0004,
+											}},
+										}},
+									], {{
+										persist: false,
+										statusMessage: "runtime save failure patch",
+										preserveScrubberTime: true,
+									}});
+								}})();
+							`, context);
+							const failingPostStoreKey = vm.runInContext("String(getCurrentReviewerId() || '') + '::' + String(currentUid || '')", context);
+							const failingGetStoreKey = vm.runInContext("String(getCurrentReviewerId() || '') + '::' + String(currentUid || '')", context);
+							trackEditFetchFailureState.postStoreKeys.add(failingPostStoreKey);
+							await vm.runInContext("saveCurrentTrackEdits()", context);
+							trackEditSaveFailureState = JSON.parse(vm.runInContext(`JSON.stringify({{
+								dirty: trackEditState.dirty,
+								patchCount: getCurrentTrackEdits().pointPatches.length,
+								saveDisabled: !!document.getElementById("track-edit-save-btn").disabled,
+								status: document.getElementById("track-edit-status").textContent || ""
+							}})`, context));
+							vm.runInContext(`
+								currentReviewerSession = {{
+									reviewer_id: "runtime-other",
+									reviewer_name: "Runtime Other",
+									display_name: "Runtime Other",
+								}};
+							`, context);
+							await vm.runInContext("loadTrackEditsForUid(currentUid)", context);
+							vm.runInContext("applyCurrentTrackEditsToCurrentData({{ preserveScrubberTime: true, forceFit: false }});", context);
+							const otherReviewerTrackEditState = JSON.parse(vm.runInContext(`JSON.stringify({{
+								patchCount: getCurrentTrackEdits().pointPatches.length,
+								dirty: trackEditState.dirty
+							}})`, context));
+							vm.runInContext(`
+								currentReviewerSession = {{
+									reviewer_id: "runtime-agent",
+									reviewer_name: "Runtime Agent",
+									display_name: "Runtime Agent",
+								}};
+							`, context);
+							trackEditFetchFailureState.getStoreKeys.add(failingGetStoreKey);
+							await vm.runInContext("loadTrackEditsForUid(currentUid)", context);
+							vm.runInContext("applyCurrentTrackEditsToCurrentData({{ preserveScrubberTime: true, forceFit: false }}); renderTrackEditPanel();", context);
+							const restoredReviewerTrackEditState = JSON.parse(vm.runInContext(`JSON.stringify({{
+								patchCount: getCurrentTrackEdits().pointPatches.length,
+								dirty: trackEditState.dirty,
+								status: document.getElementById("track-edit-status").textContent || ""
+							}})`, context));
+							trackEditReviewerIsolationState = {{
+								otherPatchCount: otherReviewerTrackEditState.patchCount,
+								otherDirty: otherReviewerTrackEditState.dirty,
+								restoredPatchCount: restoredReviewerTrackEditState.patchCount,
+								restoredDirty: restoredReviewerTrackEditState.dirty,
+								restoredStatus: restoredReviewerTrackEditState.status,
+							}};
+							vm.runInContext(`
+								currentReviewerSession = {{
+									reviewer_id: "runtime-agent",
+									reviewer_name: "Runtime Agent",
+									display_name: "Runtime Agent",
+								}};
+								openStudioManagement("export");
+								studioManagementState.exportSelectedBatch = currentBatchName;
+								studioManagementState.exportSelectedDecisions = ["accept", "reject", "skip"];
+								renderStudioExportBatchOptions();
+								renderStudioExportReviewFilters();
+								window.__datasetExportPromise = submitStudioExportAction({{ exportMode: "segment_label_dataset" }});
+							`, context);
+							await new Promise((resolve) => setTimeout(resolve, 15));
+							datasetExportPendingState = JSON.parse(vm.runInContext(`JSON.stringify({{
+								busy: studioManagementState.busy,
+								label: document.getElementById("studio-export-dataset-btn").textContent || "",
+								progressActive: document.getElementById("studio-export-dataset-btn").dataset.progressActive || "false",
+							}})`, context));
+							await vm.runInContext("window.__datasetExportPromise", context);
+							datasetExportCompletedState = JSON.parse(vm.runInContext(`JSON.stringify({{
+								busy: studioManagementState.busy,
+								label: document.getElementById("studio-export-dataset-btn").textContent || "",
+								progressActive: document.getElementById("studio-export-dataset-btn").dataset.progressActive || "false",
+								summary: document.getElementById("studio-export-summary").textContent || "",
+							}})`, context));
+							await new Promise((resolve) => setTimeout(resolve, 760));
+							datasetExportSettledState = JSON.parse(vm.runInContext(`JSON.stringify({{
+								busy: studioManagementState.busy,
+								label: document.getElementById("studio-export-dataset-btn").textContent || "",
+								progressActive: document.getElementById("studio-export-dataset-btn").dataset.progressActive || "false",
+								summary: document.getElementById("studio-export-summary").textContent || "",
+							}})`, context));
+							vm.runInContext("setTrackEditModeEnabled(false)", context);
+							vm.runInContext("currentReviewerSession = null; renderTrackEditPanel();", context);
+							trackEditNoReviewerGateState = JSON.parse(vm.runInContext(`JSON.stringify((() => {{
+								const entered = setTrackEditModeEnabled(true);
+								renderTrackEditPanel();
+								return {{
+									entered,
+									enabled: trackEditState.enabled,
+									buttonDisabled: !!document.getElementById("track-edit-toggle").disabled,
+									selection: document.getElementById("track-edit-selection").textContent || "",
+									status: document.getElementById("track-edit-status").textContent || ""
+								}};
+							}})())`, context));
+							vm.runInContext(`
+								currentReviewerSession = {{
+									reviewer_id: "runtime-agent",
+									reviewer_name: "Runtime Agent",
+									display_name: "Runtime Agent",
+								}};
+								renderTrackEditPanel();
+							`, context);
+						}}
+					}}
+					vm.runInContext(`
+						annotationSettings.exclusiveSegments = true;
+						currentReviewerSession = {{
+							reviewer_id: "runtime-agent",
+							reviewer_name: "Runtime Agent",
+							display_name: "Runtime Agent",
+						}};
+					currentUid = "__exclusive_boundary__";
+					timelineSegmentsByTrack[getCurrentTimelinePinStoreKey()] = [
+						{{ id: "left", categoryId: "stay", categoryName: "驻留", startTime: 10, endTime: 20 }},
+						{{ id: "right", categoryId: "road_car", categoryName: "驾车", startTime: 20, endTime: 30 }},
+					];
+				`, context);
+				const exclusiveBoundaryHits = JSON.parse(
+					vm.runInContext("JSON.stringify(getTimelineSegmentsAtTime(20).map(segment => segment.id))", context)
+				);
+				const exclusiveLaneIndexes = JSON.parse(
+					vm.runInContext("JSON.stringify(assignTimelineSegmentLanes(getCurrentTimelineSegments(), 2).map(segment => segment.laneIndex))", context)
+				);
+				const exclusiveCanonicalized = JSON.parse(
+					vm.runInContext(`JSON.stringify(normalizeExclusiveTimelineSegments([
+						{{ id: "stay", categoryId: "stay", categoryName: "驻留", startTime: 10, endTime: 20 }},
+						{{ id: "road", categoryId: "road_car", categoryName: "驾车", startTime: 15, endTime: 30 }}
+					]))`, context)
+				);
+				if (exclusiveBoundaryHits.length !== 1 || exclusiveBoundaryHits[0] !== "left") {{
+					throw new Error(`exclusive boundary hit test failed: ${{exclusiveBoundaryHits.join(",")}}`);
+				}}
+				if (exclusiveLaneIndexes.length !== 2 || exclusiveLaneIndexes[0] !== exclusiveLaneIndexes[1]) {{
+					throw new Error(`exclusive lane assignment drifted: ${{exclusiveLaneIndexes.join(",")}}`);
+				}}
+				if (
+					exclusiveCanonicalized.length !== 2
+					|| exclusiveCanonicalized[0].endTime !== 20
+					|| exclusiveCanonicalized[1].startTime !== 20
+				) {{
+					throw new Error(`exclusive canonicalization drifted: ${{JSON.stringify(exclusiveCanonicalized)}}`);
+				}}
+
 				const result = {{
 					localScripts,
 					selectedBatchName,
@@ -745,7 +1465,7 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 					firstUid,
 					secondUid,
 					clickedUid,
-					currentUid: vm.runInContext("currentUid", context),
+					currentUid: currentUidBeforeExclusiveCheck,
 					filteredUidListLength: vm.runInContext("filteredUidList.length", context),
 					bootstrapLayerCount,
 					activeGroupLayerCount: vm.runInContext("activeGroup?._layers?.length ?? 0", context),
@@ -769,10 +1489,45 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 					markerTargetTime,
 					markerAlignedTime,
 					markerAlignedLayer,
-					switchedBatchName,
-					switchedUid,
-					switchedLayerCount,
-					layerStatus: getElement("layer-status").textContent,
+						switchedBatchName,
+						switchedUid,
+						switchedLayerCount,
+						studioExportState,
+						studioUploadState,
+						trackEditLayer,
+						trackEditModeState,
+						trackEditSelection,
+						trackEditPatchCount,
+						trackEditPatchedLatitude,
+						trackEditPatchedFieldValue,
+						trackEditUndoDepth,
+						trackEditRedoDepth,
+						trackEditCoordinateSummary,
+						trackEditCoordinateSummaryVisible,
+						trackEditSaveMenuOpened,
+						trackEditSaveMenuClosed,
+						trackEditSpaceInputGuard,
+						trackEditSpaceSelectGuard,
+						trackEditSpaceActiveState,
+						trackEditSpaceReleasedState,
+						trackEditUndoPatchCount,
+						trackEditRedoPatchCount,
+						trackEditSaveState,
+						trackEditDownloadFilename,
+						trackEditAnnotationModeState,
+						trackEditDragState,
+						trackEditPopupSuppressed,
+						trackEditReviewShortcutGuard,
+						trackEditRevertState,
+						trackEditSaveFailureState,
+						trackEditReviewerIsolationState,
+						trackEditNoReviewerGateState,
+						datasetExportPendingState,
+						datasetExportCompletedState,
+						datasetExportSettledState,
+						exclusiveBoundaryHits,
+						exclusiveLaneIndexes,
+						layerStatus: getElement("layer-status").textContent,
 				}};
 				console.log(JSON.stringify(result));
 			}})().catch((error) => {{
@@ -825,6 +1580,103 @@ class FrontendRuntimeBootstrapTest(unittest.TestCase):
 			self.assertAlmostEqual(payload["markerAlignedTime"], payload["markerTargetTime"], delta=1.0)
 		if payload["secondUid"] and payload["secondUid"] != payload["firstUid"]:
 			self.assertEqual(payload["clickedUid"], payload["secondUid"])
+		self.assertEqual(payload["studioExportState"]["activeWorkspace"], "export")
+		self.assertTrue(payload["studioExportState"]["open"])
+		self.assertEqual(payload["studioUploadState"]["activeWorkspace"], "upload")
+		self.assertTrue(payload["studioUploadState"]["open"])
+		if payload["trackEditLayer"]:
+			self.assertIsNotNone(payload["trackEditModeState"])
+			self.assertTrue(payload["trackEditModeState"]["enabled"])
+			self.assertEqual(payload["trackEditModeState"]["editPressed"], "true")
+			self.assertEqual(payload["trackEditModeState"]["annotationPressed"], "false")
+			self.assertTrue(payload["trackEditModeState"]["mapLocked"])
+			self.assertFalse(payload["trackEditModeState"]["draggingEnabled"])
+			self.assertTrue(payload["trackEditModeState"]["scrollWheelEnabled"])
+			self.assertIsNotNone(payload["trackEditPopupSuppressed"])
+			self.assertGreater(payload["trackEditPopupSuppressed"]["markerCount"], 0)
+			self.assertFalse(payload["trackEditPopupSuppressed"]["hasPopup"])
+			self.assertIsNotNone(payload["trackEditReviewShortcutGuard"])
+			self.assertEqual(payload["trackEditReviewShortcutGuard"]["selectedDecision"], "")
+			self.assertGreaterEqual(len(payload["trackEditSelection"]), 1)
+			self.assertIsNotNone(payload["trackEditDragState"])
+			self.assertGreaterEqual(payload["trackEditDragState"]["selectionCount"], 1)
+			self.assertEqual(payload["trackEditDragState"]["patchCount"], payload["trackEditDragState"]["selectionCount"])
+			self.assertTrue(payload["trackEditDragState"]["dirty"])
+			self.assertFalse(payload["trackEditDragState"]["saveDisabled"])
+			self.assertTrue(payload["trackEditDragState"]["dragSuppressActive"])
+			self.assertTrue(payload["trackEditDragState"]["secondaryDeltaMatches"])
+			self.assertIsNotNone(payload["trackEditRevertState"])
+			self.assertEqual(payload["trackEditRevertState"]["patchCount"], 0)
+			self.assertFalse(payload["trackEditRevertState"]["dirty"])
+			self.assertTrue(payload["trackEditRevertState"]["saveDisabled"])
+			self.assertGreaterEqual(payload["trackEditPatchCount"], 1)
+			self.assertIsNotNone(payload["trackEditPatchedLatitude"])
+			self.assertGreaterEqual(payload["trackEditUndoDepth"], 1)
+			self.assertEqual(payload["trackEditRedoDepth"], 0)
+			self.assertTrue(payload["trackEditCoordinateSummaryVisible"])
+			self.assertTrue(payload["trackEditCoordinateSummary"])
+			self.assertTrue(payload["trackEditSaveMenuOpened"])
+			self.assertTrue(payload["trackEditSaveMenuClosed"])
+			self.assertTrue(payload["trackEditSpaceInputGuard"])
+			self.assertIsNotNone(payload["trackEditSpaceSelectGuard"])
+			self.assertFalse(payload["trackEditSpaceSelectGuard"]["overlayOpen"])
+			self.assertTrue(payload["trackEditSpaceSelectGuard"]["editEnabled"])
+			self.assertEqual(payload["trackEditSpaceSelectGuard"]["activeElementTag"], "BUTTON")
+			self.assertFalse(payload["trackEditSpaceSelectGuard"]["draggingEnabled"])
+			self.assertTrue(payload["trackEditSpaceSelectGuard"]["scrollWheelEnabled"])
+			self.assertIsNotNone(payload["trackEditSpaceActiveState"])
+			self.assertTrue(payload["trackEditSpaceActiveState"]["spaceModifierActive"])
+			self.assertFalse(payload["trackEditSpaceActiveState"]["mapLocked"])
+			self.assertTrue(payload["trackEditSpaceActiveState"]["draggingEnabled"])
+			self.assertTrue(payload["trackEditSpaceActiveState"]["scrollWheelEnabled"])
+			self.assertIsNotNone(payload["trackEditSpaceReleasedState"])
+			self.assertFalse(payload["trackEditSpaceReleasedState"]["spaceModifierActive"])
+			self.assertTrue(payload["trackEditSpaceReleasedState"]["mapLocked"])
+			self.assertFalse(payload["trackEditSpaceReleasedState"]["draggingEnabled"])
+			self.assertTrue(payload["trackEditSpaceReleasedState"]["scrollWheelEnabled"])
+			self.assertEqual(payload["trackEditUndoPatchCount"], 0)
+			self.assertEqual(payload["trackEditRedoPatchCount"], payload["trackEditPatchCount"])
+			self.assertIsNotNone(payload["trackEditSaveState"])
+			self.assertFalse(payload["trackEditSaveState"]["dirty"])
+			self.assertTrue(payload["trackEditSaveState"]["lastSavedAt"])
+			self.assertEqual(payload["trackEditSaveState"]["patchCount"], payload["trackEditPatchCount"])
+			self.assertTrue(payload["trackEditSaveState"]["saveDisabled"])
+			self.assertTrue(payload["trackEditDownloadFilename"].endswith(".json"))
+			self.assertIsNotNone(payload["trackEditAnnotationModeState"])
+			self.assertFalse(payload["trackEditAnnotationModeState"]["enabled"])
+			self.assertEqual(payload["trackEditAnnotationModeState"]["editPressed"], "false")
+			self.assertEqual(payload["trackEditAnnotationModeState"]["annotationPressed"], "true")
+			self.assertFalse(payload["trackEditAnnotationModeState"]["mapLocked"])
+			self.assertTrue(payload["trackEditAnnotationModeState"]["draggingEnabled"])
+			self.assertIsNotNone(payload["trackEditSaveFailureState"])
+			self.assertTrue(payload["trackEditSaveFailureState"]["dirty"])
+			self.assertGreaterEqual(payload["trackEditSaveFailureState"]["patchCount"], 1)
+			self.assertFalse(payload["trackEditSaveFailureState"]["saveDisabled"])
+			self.assertIn("保存失败", payload["trackEditSaveFailureState"]["status"])
+			self.assertIsNotNone(payload["trackEditReviewerIsolationState"])
+			self.assertEqual(payload["trackEditReviewerIsolationState"]["otherPatchCount"], 0)
+			self.assertFalse(payload["trackEditReviewerIsolationState"]["otherDirty"])
+			self.assertGreaterEqual(payload["trackEditReviewerIsolationState"]["restoredPatchCount"], 1)
+			self.assertIsNotNone(payload["trackEditNoReviewerGateState"])
+			self.assertFalse(payload["trackEditNoReviewerGateState"]["entered"])
+			self.assertFalse(payload["trackEditNoReviewerGateState"]["enabled"])
+			self.assertTrue(payload["trackEditNoReviewerGateState"]["buttonDisabled"])
+			self.assertIn("请先设置当前标注者", payload["trackEditNoReviewerGateState"]["selection"])
+			self.assertIsNotNone(payload["datasetExportPendingState"])
+			self.assertTrue(payload["datasetExportPendingState"]["busy"], payload["datasetExportPendingState"])
+			self.assertEqual(payload["datasetExportPendingState"]["progressActive"], "true")
+			self.assertRegex(payload["datasetExportPendingState"]["label"], r"最小 GPS 导出\s+\d+%")
+			self.assertIsNotNone(payload["datasetExportCompletedState"])
+			self.assertFalse(payload["datasetExportCompletedState"]["busy"])
+			self.assertIn(payload["datasetExportCompletedState"]["progressActive"], {"true", "false"})
+			self.assertIn("最小 GPS 导出", payload["datasetExportCompletedState"]["label"])
+			self.assertTrue(payload["datasetExportCompletedState"]["summary"])
+			self.assertIsNotNone(payload["datasetExportSettledState"])
+			self.assertFalse(payload["datasetExportSettledState"]["busy"])
+			self.assertEqual(payload["datasetExportSettledState"]["progressActive"], "false")
+			self.assertEqual(payload["datasetExportSettledState"]["label"], "最小 GPS 导出")
+		self.assertEqual(payload["exclusiveBoundaryHits"], ["left"])
+		self.assertEqual(payload["exclusiveLaneIndexes"], [0, 0])
 		if payload["alternateBatchName"]:
 			self.assertEqual(payload["switchedBatchName"], payload["alternateBatchName"])
 			self.assertTrue(payload["switchedUid"])

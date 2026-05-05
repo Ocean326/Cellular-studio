@@ -61,6 +61,24 @@ class DateWindowQuickSegmentUiContractTest(unittest.TestCase):
 		self.assertIn("handleReviewShortcutKeyboardEvent", self.boot_js)
 		self.assertIn("isKeyboardTargetBlockingReviewShortcuts", self.boot_js)
 
+	def test_time_scrubber_exposes_dedicated_segment_strip(self) -> None:
+		self.assertIn('id="time-scrubber-segment-row"', self.html)
+		self.assertIn('id="time-scrubber-segment-canvas"', self.html)
+		self.assertIn('id="time-scrubber-segment-detail"', self.html)
+		self.assertIn("分段层", self.html)
+		self.assertIn("function drawTimeScrubberSegmentCanvas", self.track_js)
+		self.assertIn("function renderTimeScrubberSegmentDetail", self.track_js)
+		self.assertIn("hoveredSegmentId", self.track_js)
+		self.assertIn("selectedSegmentId", self.track_js)
+		self.assertIn('document.getElementById("time-scrubber-segment-canvas")', self.boot_js)
+
+	def test_exclusive_segment_boundary_helpers_exist(self) -> None:
+		self.assertIn("function normalizeExclusiveTimelineSegments", self.track_js)
+		self.assertIn("existingSegment.endTime", self.track_js)
+		self.assertIn("function timelineSegmentContainsTime", self.track_js)
+		self.assertIn("targetTime > segment.startTime", self.track_js)
+		self.assertIn("laneEnds[laneIndex] = segment.endTime;", self.track_js)
+
 
 if __name__ == "__main__":
 	unittest.main()

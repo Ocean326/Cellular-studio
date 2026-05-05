@@ -1,8 +1,35 @@
 (function attachStudioManagementCore(root) {
-	const DEFAULT_UPLOAD_TYPE = "trajectory4";
+	const DEFAULT_UPLOAD_TYPE = "auto";
 	const modules = root.TrajectoryStudioModules || (root.TrajectoryStudioModules = {});
 
 	const formatSpecs = Object.freeze({
+		auto: {
+			title: "自动识别上传",
+			summary: "可直接上传 4 元组轨迹或 6 元组信令 CSV；后端会按表头自动识别实际类型并走对应处理链路。",
+			fields: [
+				{
+					key: "trajectory4",
+					name: "trajectory4",
+					type: "uid, latitude/lat, longitude/lon, timestamp_ms/timestamp",
+					required: false,
+					description: "4 元组轨迹，支持可选 status/state。",
+					accepted: ["uid", "latitude", "longitude", "timestamp_ms", "timestamp", "status"],
+				},
+				{
+					key: "signal6",
+					name: "signal6",
+					type: "uid, cid, latitude/lat, longitude/lon, t_in, t_out",
+					required: false,
+					description: "6 元组信令，支持可选 status/state，且会校验北京范围。",
+					accepted: ["uid", "cid", "latitude", "longitude", "t_in", "t_out", "status"],
+				},
+			],
+			rules: [
+				"默认自动识别 4 元组轨迹和 6 元组信令，无需手动切换上传类型。",
+				"如果同一文件混入两种结构，系统会拒绝并提示你拆分文件。",
+				"需要自定义字段映射时，建议先明确选择 trajectory4 或 signal6 再上传。",
+			],
+		},
 		trajectory4: {
 			title: "4 元组轨迹文件",
 			summary: "每行是一个轨迹点，可在同一个文件里包含多个 uid；后端会按 uid 分组并按时间排序。",
@@ -309,6 +336,46 @@
 		return firstArray(payload).map(item => normalizeUpload(item, helpers));
 	}
 
+	async function fetchBatches(apiFetchJson) {
+		const payload = await apiFetchJson("/api/batches");
+		return {
+			currentBatch: pickFirstString(payload && payload.current_batch),
+			items: firstArray(payload && payload.batches),
+		};
+	}
+
+	async function fetchReviewerReviews(apiFetchJson, params = {}) {
+		const url = new URL("/api/reviews", root.location?.origin || "http://localhost");
+		Object.entries(params || {}).forEach(([key, value]) => {
+			if (value == null || value === "") return;
+			url.searchParams.set(key, value);
+		});
+		return apiFetchJson(`${url.pathname}${url.search}`);
+	}
+
+	async function exportReviewerBundle(apiFetchJson, body) {
+		return apiFetchJson("/api/export/reviewer-bundle", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body || {}),
+		});
+	}
+
+	function triggerDownload(url, filename = "") {
+		const anchor = root.document?.createElement ? root.document.createElement("a") : null;
+		if (!anchor) {
+			root.location.href = url;
+			return;
+		}
+		anchor.href = url;
+		if (filename) anchor.download = filename;
+		anchor.rel = "noopener";
+		anchor.style.display = "none";
+		root.document.body?.appendChild(anchor);
+		anchor.click();
+		anchor.remove();
+	}
+
 	function uploadBlob(deps, uploadId, file, options = {}) {
 		const pickString = deps && typeof deps.pickFirstString === "function" ? deps.pickFirstString : pickFirstString;
 		const XhrCtor = deps && deps.XMLHttpRequest ? deps.XMLHttpRequest : root.XMLHttpRequest;
@@ -354,7 +421,11 @@
 		parseRawPayload,
 		createUploadRecord,
 		fetchActor,
+		fetchBatches,
+		fetchReviewerReviews,
 		fetchUploads,
+		exportReviewerBundle,
+		triggerDownload,
 		uploadBlob,
 	});
 })(typeof window !== "undefined" ? window : globalThis);

@@ -4,11 +4,80 @@
 			const uploadProcessButton = document.getElementById("studio-management-upload-process-btn");
 			const refreshButton = document.getElementById("studio-management-refresh-btn");
 			const resetButton = document.getElementById("studio-management-reset-btn");
+			const exportDownloadButton = document.getElementById("studio-export-download-btn");
+			const exportDatasetButton = document.getElementById("studio-export-dataset-btn");
 			if (uploadButton) uploadButton.disabled = studioManagementState.busy;
 			if (uploadProcessButton) uploadProcessButton.disabled = studioManagementState.busy;
 			if (refreshButton) refreshButton.disabled = studioManagementState.busy;
 			if (resetButton) resetButton.disabled = studioManagementState.busy;
+			if (exportDownloadButton) exportDownloadButton.disabled = studioManagementState.busy;
+			if (exportDatasetButton) exportDatasetButton.disabled = studioManagementState.busy;
+			renderStudioExportActionButtons();
 			renderStudioManagementProgress();
+		}
+
+		function stopStudioExportDatasetButtonProgress() {
+			if (!studioManagementState.exportDatasetProgressTimerId) return;
+			window.clearInterval(studioManagementState.exportDatasetProgressTimerId);
+			studioManagementState.exportDatasetProgressTimerId = 0;
+		}
+
+		function stopStudioExportDatasetButtonProgressReset() {
+			if (!studioManagementState.exportDatasetProgressResetTimerId) return;
+			window.clearTimeout(studioManagementState.exportDatasetProgressResetTimerId);
+			studioManagementState.exportDatasetProgressResetTimerId = 0;
+		}
+
+		function renderStudioExportActionButtons() {
+			const exportDatasetButton = document.getElementById("studio-export-dataset-btn");
+			if (!exportDatasetButton) return;
+			const active = !!studioManagementState.exportDatasetProgressActive;
+			const percent = Math.max(0, Math.min(100, Math.round(studioManagementState.exportDatasetProgressPercent || 0)));
+			exportDatasetButton.dataset.progressActive = active ? "true" : "false";
+			exportDatasetButton.style.setProperty("--studio-btn-progress", `${percent}%`);
+			exportDatasetButton.textContent = active ? `最小 GPS 导出 ${percent}%` : "最小 GPS 导出";
+			exportDatasetButton.setAttribute("aria-busy", active ? "true" : "false");
+		}
+
+		function resetStudioExportDatasetButtonProgress() {
+			stopStudioExportDatasetButtonProgress();
+			stopStudioExportDatasetButtonProgressReset();
+			studioManagementState.exportDatasetProgressActive = false;
+			studioManagementState.exportDatasetProgressPercent = 0;
+			renderStudioExportActionButtons();
+		}
+
+		function scheduleStudioExportDatasetButtonProgressReset(delayMs = 0) {
+			stopStudioExportDatasetButtonProgress();
+			stopStudioExportDatasetButtonProgressReset();
+			const normalizedDelay = Math.max(0, Number(delayMs) || 0);
+			if (!normalizedDelay) {
+				resetStudioExportDatasetButtonProgress();
+				return;
+			}
+			studioManagementState.exportDatasetProgressResetTimerId = window.setTimeout(() => {
+				studioManagementState.exportDatasetProgressResetTimerId = 0;
+				studioManagementState.exportDatasetProgressActive = false;
+				studioManagementState.exportDatasetProgressPercent = 0;
+				renderStudioExportActionButtons();
+			}, normalizedDelay);
+		}
+
+		function startStudioExportDatasetButtonProgress() {
+			stopStudioExportDatasetButtonProgress();
+			stopStudioExportDatasetButtonProgressReset();
+			studioManagementState.exportDatasetProgressActive = true;
+			studioManagementState.exportDatasetProgressPercent = 8;
+			renderStudioExportActionButtons();
+			studioManagementState.exportDatasetProgressTimerId = window.setInterval(() => {
+				const currentPercent = Number(studioManagementState.exportDatasetProgressPercent) || 0;
+				if (currentPercent >= 94) return;
+				studioManagementState.exportDatasetProgressPercent = Math.min(
+					94,
+					currentPercent + Math.max(2, (94 - currentPercent) * 0.16),
+				);
+				renderStudioExportActionButtons();
+			}, 180);
 		}
 
 		function setStudioManagementFlash(kind, message) {
@@ -38,9 +107,13 @@
 			progress.classList.toggle("visible", !!studioManagementState.progressVisible);
 			progress.dataset.tone = studioManagementState.progressTone || "info";
 			progress.dataset.busy = studioManagementState.busy ? "true" : "false";
+			progress.setAttribute("aria-busy", studioManagementState.busy ? "true" : "false");
 			title.textContent = studioManagementState.progressTitle || "等待上传";
-			percent.textContent = `${Math.max(0, Math.min(100, Math.round(studioManagementState.progressPercent || 0)))}%`;
-			bar.style.width = `${Math.max(0, Math.min(100, studioManagementState.progressPercent || 0))}%`;
+			const clampedPercent = Math.max(0, Math.min(100, Math.round(studioManagementState.progressPercent || 0)));
+			percent.textContent = `${clampedPercent}%`;
+			bar.style.width = `${clampedPercent}%`;
+			bar.setAttribute("aria-valuenow", String(clampedPercent));
+			bar.setAttribute("aria-valuetext", `${studioManagementState.progressTitle || "等待上传"} ${clampedPercent}%`);
 			detail.textContent = studioManagementState.progressDetail || "选择文件后可以看到上传与处理进度。";
 		}
 
@@ -114,6 +187,7 @@
 			const trigger = document.getElementById("studio-management-help-trigger");
 			const anchor = document.getElementById("studio-management-help-anchor");
 			if (helpPanel) helpPanel.classList.toggle("collapsed", !studioManagementState.helpVisible);
+			if (helpPanel) helpPanel.setAttribute("aria-hidden", studioManagementState.helpVisible ? "false" : "true");
 			if (trigger) trigger.setAttribute("aria-expanded", studioManagementState.helpVisible ? "true" : "false");
 			if (anchor) anchor.classList.toggle("pinned", !!studioManagementState.helpPinned);
 		}
@@ -184,6 +258,7 @@
 			const spec = getStudioManagementFormatSpec();
 			panel.innerHTML = buildStudioManagementCustomFieldHtml(spec, getStudioManagementCustomFieldStore(uploadType));
 			panel.classList.toggle("collapsed", !studioManagementState.customFieldsExpanded);
+			panel.setAttribute("aria-hidden", studioManagementState.customFieldsExpanded ? "false" : "true");
 			toggle.setAttribute("aria-expanded", studioManagementState.customFieldsExpanded ? "true" : "false");
 			toggle.textContent = studioManagementState.customFieldsExpanded ? "收起自定义" : "自定义字段";
 		}
@@ -207,7 +282,7 @@
 			const annotationModeInput = document.getElementById("studio-management-annotation-mode");
 			const displayNameInput = document.getElementById("studio-management-display-name");
 			const uploadFileInput = document.getElementById("studio-management-upload-file");
-			if (uploadTypeInput) uploadTypeInput.value = "trajectory4";
+			if (uploadTypeInput) uploadTypeInput.value = "auto";
 			if (visibilityScopeInput) visibilityScopeInput.value = "private";
 			if (annotationModeInput) annotationModeInput.value = "annotatable";
 			if (displayNameInput) displayNameInput.value = "";
@@ -227,15 +302,16 @@
 			const displayNameInput = document.getElementById("studio-management-display-name");
 			const uploadFileInput = document.getElementById("studio-management-upload-file");
 			const uploadType = getStudioManagementUploadType();
-			const file = uploadFileInput?.files?.[0] || null;
+			const files = Array.from(uploadFileInput?.files || []).filter(Boolean);
+			const displayName = displayNameInput?.value?.trim() || "";
 			return {
-				file,
+				files,
 				body: {
 					upload_type: uploadType,
 					visibility_scope: visibilityScopeInput?.value || "private",
 					annotation_mode: annotationModeInput?.value || "annotatable",
-					display_name: displayNameInput?.value?.trim() || undefined,
-					original_name: file ? file.name : undefined,
+					display_name: files.length === 1 ? displayName || undefined : undefined,
+					original_name: files.length === 1 ? files[0].name : undefined,
 					field_mapping: getStudioManagementFieldMappingForSubmit(uploadType),
 				},
 			};
@@ -274,7 +350,14 @@
 		}
 
 		function studioManagementUploadCanOpen(upload) {
-			return Boolean(upload?.batchName);
+			const status = String(upload?.status || "").toLowerCase();
+			return Boolean(upload?.batchName)
+				&& (
+					status.includes("publish")
+					|| status.includes("complete")
+					|| status.includes("asset_ready")
+					|| status.includes("preview_ready")
+				);
 		}
 
 		function isStudioManagementVisibleUpload(upload) {
@@ -343,11 +426,52 @@
 			`).join("");
 		}
 
+		function getStudioManagementWorkspaceAnchor(workspace = "upload") {
+			return document.getElementById(workspace === "export" ? "studio-export-section" : "studio-upload-section");
+		}
+
+		function getStudioManagementWorkspaceScrollOwner() {
+			if (typeof window?.matchMedia === "function" && window.matchMedia("(max-width: 980px)").matches) {
+				return document.getElementById("studio-management-body");
+			}
+			return document.getElementById("studio-management-sidebar") || document.getElementById("studio-management-body");
+		}
+
 		function syncStudioManagementChrome() {
 			const overlay = document.getElementById("studio-management-overlay");
+			const body = document.getElementById("studio-management-body");
 			const entry = document.getElementById("studio-management-entry");
+			const exportEntry = document.getElementById("studio-export-entry");
+			const uploadSection = document.getElementById("studio-upload-section");
+			const exportSection = document.getElementById("studio-export-section");
 			const isOpen = overlay?.classList.contains("open");
-			if (entry) entry.classList.toggle("active", !!isOpen);
+			const activeWorkspace = studioManagementState.exportActiveWorkspace === "export" ? "export" : "upload";
+			const isUploadActive = activeWorkspace === "upload";
+			const isExportActive = activeWorkspace === "export";
+			if (overlay) overlay.dataset.activeWorkspace = activeWorkspace;
+			if (body) body.dataset.activeWorkspace = activeWorkspace;
+			if (uploadSection) {
+				uploadSection.dataset.workspaceActive = isUploadActive ? "true" : "false";
+				uploadSection.hidden = !isUploadActive;
+				uploadSection.setAttribute("aria-hidden", isUploadActive ? "false" : "true");
+			}
+			if (exportSection) {
+				exportSection.dataset.workspaceActive = isExportActive ? "true" : "false";
+				exportSection.hidden = !isExportActive;
+				exportSection.setAttribute("aria-hidden", isExportActive ? "false" : "true");
+			}
+			if (entry) {
+				const isActive = !!isOpen && isUploadActive;
+				entry.classList.toggle("active", isActive);
+				entry.setAttribute("aria-expanded", isOpen ? "true" : "false");
+				entry.setAttribute("aria-pressed", isActive ? "true" : "false");
+			}
+			if (exportEntry) {
+				const isActive = !!isOpen && isExportActive;
+				exportEntry.classList.toggle("active", isActive);
+				exportEntry.setAttribute("aria-expanded", isOpen ? "true" : "false");
+				exportEntry.setAttribute("aria-pressed", isActive ? "true" : "false");
+			}
 		}
 
 		async function loadStudioManagementActor() {
@@ -396,6 +520,7 @@
 					tone: "info",
 				});
 				await loadStudioManagementUploads({ silent: true });
+				await loadStudioExportBatches();
 				await refreshBatchListPreservingCurrent({ preferredBatchName: currentBatchName || "" });
 				setStudioManagementProgress({
 					visible: true,
@@ -407,6 +532,13 @@
 				setStudioManagementFlash("success", `已触发处理：${uploadId}`);
 			} catch (error) {
 				stopStudioManagementProgressSimulation();
+				try {
+					await loadStudioManagementUploads({ silent: true });
+					await loadStudioExportBatches();
+					await refreshBatchListPreservingCurrent({ preferredBatchName: currentBatchName || "" });
+				} catch (_) {
+					// Keep the original processing error as the primary signal.
+				}
 				setStudioManagementProgress({
 					visible: true,
 					percent: Math.max(74, studioManagementState.progressPercent || 74),
@@ -426,6 +558,7 @@
 			studioManagementState.uploads = studioManagementState.uploads.filter(upload => upload.uploadId !== uploadId);
 			renderStudioManagementUploads();
 			await loadStudioManagementUploads({ silent: true });
+			await loadStudioExportBatches();
 			await refreshBatchListPreservingCurrent({ preferredBatchName: currentBatchName || "" });
 			setStudioManagementFlash("success", `已删除上传：${uploadId}`);
 		}
@@ -443,71 +576,91 @@
 		}
 
 		async function submitStudioManagementUpload(options = {}) {
-			const { file, body } = getStudioManagementFormPayload();
-			if (!file) {
-				setStudioManagementFlash("error", "先选择一个要上传的 CSV 文件。");
+			const { files, body } = getStudioManagementFormPayload();
+			if (!files.length) {
+				setStudioManagementFlash("error", "先选择至少一个要上传的 CSV 文件。");
 				return;
 			}
 			setStudioManagementBusy(true);
 			try {
 				clearStudioManagementProgress();
-				setStudioManagementProgress({
-					visible: true,
-					percent: 8,
-					title: "创建上传记录",
-					detail: `正在为 ${file.name} 创建上传记录…`,
-					tone: "info",
-				});
-				setStudioManagementFlash("info", "正在创建上传记录…");
-				const created = normalizeStudioManagementUpload(await createStudioManagementUploadRecord(body));
-				if (!created.uploadId) throw new Error("后端未返回 upload_id，前端无法继续上传文件。");
-				setStudioManagementProgress({
-					visible: true,
-					percent: 14,
-					title: "上传文件中",
-					detail: `上传记录已创建：${created.uploadId}，正在传输文件内容…`,
-					tone: "info",
-				});
-				setStudioManagementFlash("info", `上传记录已创建，正在传输文件：${created.uploadId}`);
-				await uploadStudioManagementBlob(created.uploadId, file, {
-					onProgress: (event) => {
-						if (!event.lengthComputable || event.total <= 0) {
+				const completedUploadIds = [];
+				for (let index = 0; index < files.length; index += 1) {
+					const file = files[index];
+					const fileLabel = `${file.name}（${index + 1}/${files.length}）`;
+					const recordBody = {
+						...body,
+						display_name: files.length === 1 ? body.display_name : undefined,
+						original_name: file.name,
+					};
+					setStudioManagementProgress({
+						visible: true,
+						percent: 4 + (index / files.length) * (options.processAfterUpload ? 48 : 84),
+						title: "创建上传记录",
+						detail: `正在为 ${fileLabel} 创建上传记录…`,
+						tone: "info",
+					});
+					setStudioManagementFlash("info", `正在创建上传记录：${fileLabel}`);
+					const created = normalizeStudioManagementUpload(await createStudioManagementUploadRecord(recordBody));
+					if (!created.uploadId) throw new Error("后端未返回 upload_id，前端无法继续上传文件。");
+					completedUploadIds.push(created.uploadId);
+					const uploadBase = 10 + (index / files.length) * (options.processAfterUpload ? 46 : 82);
+					const uploadSpan = (options.processAfterUpload ? 34 : 72) / files.length;
+					setStudioManagementProgress({
+						visible: true,
+						percent: uploadBase,
+						title: "上传文件中",
+						detail: `上传记录已创建：${created.uploadId}，正在传输 ${fileLabel}…`,
+						tone: "info",
+					});
+					await uploadStudioManagementBlob(created.uploadId, file, {
+						onProgress: (event) => {
+							if (!event.lengthComputable || event.total <= 0) {
+								setStudioManagementProgress({
+									visible: true,
+									percent: Math.max(uploadBase, studioManagementState.progressPercent || uploadBase),
+									title: "上传文件中",
+									detail: `正在上传 ${fileLabel}，已发送 ${formatBytes(event.loaded)}。`,
+									tone: "info",
+								});
+								return;
+							}
+							const ratio = Math.max(0, Math.min(1, event.loaded / event.total));
 							setStudioManagementProgress({
 								visible: true,
-								percent: Math.max(18, studioManagementState.progressPercent || 18),
+								percent: uploadBase + ratio * uploadSpan,
 								title: "上传文件中",
-								detail: `正在上传 ${file.name}，已发送 ${formatBytes(event.loaded)}。`,
+								detail: `正在上传 ${fileLabel}：${formatBytes(event.loaded)} / ${formatBytes(event.total)}`,
 								tone: "info",
 							});
-							return;
-						}
-						const ratio = Math.max(0, Math.min(1, event.loaded / event.total));
-						const mappedPercent = 14 + ratio * 58;
+						},
+					});
+					if (options.processAfterUpload) {
 						setStudioManagementProgress({
 							visible: true,
-							percent: mappedPercent,
-							title: "上传文件中",
-							detail: `正在上传 ${file.name}：${formatBytes(event.loaded)} / ${formatBytes(event.total)}`,
+							percent: Math.max(52, studioManagementState.progressPercent || 52),
+							title: "文件上传完成",
+							detail: `${fileLabel} 已上传完成，准备进入后端处理。`,
 							tone: "info",
 						});
-					},
-				});
-				setStudioManagementProgress({
-					visible: true,
-					percent: options.processAfterUpload ? 74 : 100,
-					title: options.processAfterUpload ? "文件上传完成" : "上传完成",
-					detail: options.processAfterUpload
-						? `文件 ${file.name} 已上传完成，准备进入后端处理。`
-						: `文件 ${file.name} 已上传完成，后续可在“我的上传”里单独触发处理。`,
-					tone: options.processAfterUpload ? "info" : "success",
-				});
-				if (options.processAfterUpload) {
-					await processStudioManagementUpload(created.uploadId, {
-						successDetail: `上传 ${created.uploadId} 已处理完成，可以直接打开生成后的 batch。`,
+						await processStudioManagementUpload(created.uploadId, {
+							successDetail: `上传 ${created.uploadId} 已处理完成，可以直接打开生成后的 batch。`,
+						});
+					}
+				}
+				if (!options.processAfterUpload) {
+					setStudioManagementProgress({
+						visible: true,
+						percent: 100,
+						title: "上传完成",
+						detail: `已完成 ${files.length} 个文件上传，后续可在“我的上传”里单独触发处理。`,
+						tone: "success",
 					});
-				} else {
 					await loadStudioManagementUploads({ silent: true });
-					setStudioManagementFlash("success", `文件已上传：${created.uploadId}`);
+					await loadStudioExportBatches();
+					setStudioManagementFlash("success", `已上传 ${files.length} 个文件：${completedUploadIds.join("、")}`);
+				} else {
+					setStudioManagementFlash("success", `已完成 ${files.length} 个文件的上传与处理。`);
 				}
 				resetStudioManagementForm({ clearFlash: false, clearProgress: false });
 			} catch (error) {
@@ -525,12 +678,268 @@
 			}
 		}
 
+		function setStudioExportSummary(message, tone = "") {
+			const summary = document.getElementById("studio-export-summary");
+			if (!summary) return;
+			summary.className = tone ? `studio-management-hint ${tone}` : "studio-management-hint";
+			summary.textContent = message || "默认使用当前 batch，可切换批次后再按 UID、Tag 和状态筛选。";
+		}
+
+		function getStudioExportSelectedDecisions() {
+			return ["accept", "reject", "skip"].filter((decision) => {
+				const input = document.getElementById(`studio-export-decision-${decision}`);
+				return !!input?.checked;
+			});
+		}
+
+		function getStudioExportReviewEntries(batchName = studioManagementState.exportSelectedBatch || currentBatchName || "") {
+			return studioManagementState.exportReviewsByBatch[String(batchName || "").trim()]?.entries || [];
+		}
+
+		function renderStudioExportBatchOptions() {
+			const select = document.getElementById("studio-export-batch-select");
+			if (!select) return;
+			const current = String(studioManagementState.exportSelectedBatch || currentBatchName || "").trim();
+			const items = studioManagementState.exportBatches || [];
+			select.innerHTML = items.map((batch) => `
+				<option value="${escapeHtml(batch.name || "")}" ${current === batch.name ? "selected" : ""}>
+					${escapeHtml(batch.label || batch.name || "-")}
+				</option>
+			`).join("");
+		}
+
+		function renderStudioExportReviewFilters() {
+			const uidSelect = document.getElementById("studio-export-uid-select");
+			const tagSelect = document.getElementById("studio-export-tag-select");
+			const entries = getStudioExportReviewEntries();
+			if (uidSelect) {
+				const uidOptions = entries.map((review) => String(review.uid || "").trim()).filter(Boolean);
+				uidSelect.innerHTML = [
+					`<option value="">全部已标注 UID</option>`,
+					...uidOptions.map((uid) => `<option value="${escapeHtml(uid)}"${studioManagementState.exportSelectedUid === uid ? " selected" : ""}>${escapeHtml(uid)}</option>`),
+				].join("");
+			}
+			if (tagSelect) {
+				const tags = [];
+				entries.forEach((review) => {
+					(review.trajectory_tags || []).forEach((tag) => {
+						const value = String(tag || "").trim();
+						if (value && !tags.includes(value)) tags.push(value);
+					});
+				});
+				tagSelect.innerHTML = [
+					`<option value="">全部 Tag</option>`,
+					...tags.map((tag) => `<option value="${escapeHtml(tag)}"${studioManagementState.exportSelectedTag === tag ? " selected" : ""}>${escapeHtml(tag)}</option>`),
+				].join("");
+			}
+			const counts = { accept: 0, reject: 0, skip: 0 };
+			entries.forEach((review) => {
+				const decision = String(review.decision || "").trim().toLowerCase();
+				if (Object.prototype.hasOwnProperty.call(counts, decision)) counts[decision] += 1;
+			});
+			setStudioExportSummary(
+				entries.length
+					? `当前批次可导出 ${entries.length} 条已标注样本，其中通过 ${counts.accept}、未通过 ${counts.reject}、跳过 ${counts.skip}。`
+					: "当前批次下还没有当前标注者的已标注样本。"
+			);
+		}
+
+		function resetStudioExportFilters(options = {}) {
+			if (options.preferCurrentBatch === true) {
+				const preferredBatchName = String(currentBatchName || "").trim();
+				if (preferredBatchName) {
+					studioManagementState.exportSelectedBatch = preferredBatchName;
+				}
+			}
+			if (options.clearBatch === true && options.preferCurrentBatch !== true) {
+				studioManagementState.exportSelectedBatch = "";
+			}
+			studioManagementState.exportSelectedUid = "";
+			studioManagementState.exportSelectedTag = "";
+		}
+
+		async function loadStudioExportBatches() {
+			const payload = await STUDIO_ADMIN_CORE.fetchBatches(apiFetchJson);
+			studioManagementState.exportBatches = payload.items || [];
+			const fallbackBatchName = String(currentBatchName || payload.currentBatch || studioManagementState.exportBatches[0]?.name || "").trim();
+			if (!studioManagementState.exportSelectedBatch || !studioManagementState.exportBatches.some((batch) => batch.name === studioManagementState.exportSelectedBatch)) {
+				studioManagementState.exportSelectedBatch = fallbackBatchName;
+			}
+			renderStudioExportBatchOptions();
+			return studioManagementState.exportBatches;
+		}
+
+		async function loadStudioExportReviews(batchName = studioManagementState.exportSelectedBatch || currentBatchName || "") {
+			const normalizedBatchName = String(batchName || "").trim();
+			const reviewerId = getCurrentReviewerId();
+			if (!normalizedBatchName) {
+				studioManagementState.exportReviewsByBatch = {};
+				renderStudioExportReviewFilters();
+				return [];
+			}
+			if (!reviewerId) {
+				studioManagementState.exportReviewsByBatch[normalizedBatchName] = { entries: [], payload: {} };
+				renderStudioExportReviewFilters();
+				setStudioExportSummary("先选择当前标注者，再按当前标注者的结果导出压缩包。");
+				return [];
+			}
+			const payload = await STUDIO_ADMIN_CORE.fetchReviewerReviews(apiFetchJson, {
+				batch: normalizedBatchName,
+				reviewer_id: reviewerId,
+			});
+			const entries = Object.values(payload?.reviews || {}).sort((left, right) => {
+				return String(left?.uid || "").localeCompare(String(right?.uid || ""), "zh-CN", { numeric: true });
+			});
+			studioManagementState.exportReviewsByBatch[normalizedBatchName] = { entries, payload };
+			if (studioManagementState.exportSelectedUid && !entries.some((review) => String(review.uid || "") === studioManagementState.exportSelectedUid)) {
+				studioManagementState.exportSelectedUid = "";
+			}
+			if (studioManagementState.exportSelectedTag) {
+				const hasTag = entries.some((review) => (review.trajectory_tags || []).includes(studioManagementState.exportSelectedTag));
+				if (!hasTag) studioManagementState.exportSelectedTag = "";
+			}
+			renderStudioExportReviewFilters();
+			return entries;
+		}
+
+		function focusStudioManagementWorkspace(workspace = "upload") {
+			studioManagementState.exportActiveWorkspace = workspace === "export" ? "export" : "upload";
+			syncStudioManagementChrome();
+			const target = getStudioManagementWorkspaceAnchor(studioManagementState.exportActiveWorkspace);
+			const scrollOwner = getStudioManagementWorkspaceScrollOwner();
+			if (scrollOwner) {
+				if (typeof scrollOwner.scrollTo === "function") {
+					scrollOwner.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+				} else if (Object.prototype.hasOwnProperty.call(scrollOwner, "scrollTop") || typeof scrollOwner.scrollTop === "number") {
+					scrollOwner.scrollTop = 0;
+				}
+			}
+			try {
+				target?.focus?.({ preventScroll: true });
+			} catch (_) {
+				target?.focus?.();
+			}
+		}
+
+		async function submitStudioExportDownload() {
+			return submitStudioExportAction({ exportMode: "reviewer_bundle" });
+		}
+
+		function getStudioExportIntervalSeconds() {
+			const input = document.getElementById("studio-export-interval-seconds");
+			const value = Number(input?.value || 5);
+			const normalized = Math.max(5, Number.isFinite(value) ? Math.round(value) : 5);
+			if (input) input.value = String(normalized);
+			return normalized;
+		}
+
+		function getStudioExportTimestampUnit() {
+			const active = document.querySelector("#studio-export-timestamp-unit-group .studio-export-unit-btn.active");
+			const token = String(active?.dataset?.studioExportTimestampUnit || active?.getAttribute("data-studio-export-timestamp-unit") || "ms")
+				.trim()
+				.toLowerCase();
+			return token === "s" || token === "sec" || token === "seconds" ? "seconds" : "ms";
+		}
+
+		function getStudioExportLabeledSpanOnly() {
+			return !!document.getElementById("studio-export-labeled-span-only")?.checked;
+		}
+
+		async function submitStudioExportAction(options = {}) {
+			const reviewerId = getCurrentReviewerId();
+			if (!reviewerId) {
+				setStudioExportSummary("先选择当前标注者，再导出对应标注结果。", "error");
+				return;
+			}
+			const batchName = String(studioManagementState.exportSelectedBatch || currentBatchName || "").trim();
+			if (!batchName) {
+				setStudioExportSummary("当前没有可导出的 batch。", "error");
+				return;
+			}
+			const decisions = getStudioExportSelectedDecisions();
+			if (!decisions.length) {
+				setStudioExportSummary("至少选择一种状态：通过、未通过或跳过。", "error");
+				return;
+			}
+			const exportMode = String(options.exportMode || "reviewer_bundle").trim().toLowerCase();
+			const isDatasetExport = exportMode === "segment_label_dataset";
+			const datasetExportStartedAt = isDatasetExport ? Date.now() : 0;
+			let datasetExportCompleted = false;
+			if (isDatasetExport) startStudioExportDatasetButtonProgress();
+			else resetStudioExportDatasetButtonProgress();
+			setStudioManagementBusy(true);
+			setStudioExportSummary(isDatasetExport ? "正在生成分段标签数据集，请稍候…" : "正在打包导出，请稍候…");
+			try {
+				const bundleName = [
+					isDatasetExport ? "segment_label_dataset" : "review_bundle",
+					batchName.replace(/[^a-zA-Z0-9_-]+/g, "_"),
+					new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z"),
+				].join("_");
+				const payload = {
+					batch: batchName,
+					reviewer_id: reviewerId,
+					decisions,
+					create_zip: true,
+					clean: true,
+					bundle_name: bundleName,
+				};
+				if (isDatasetExport) {
+					payload.export_mode = "segment_label_dataset";
+					payload.interval_seconds = getStudioExportIntervalSeconds();
+					payload.timestamp_unit = getStudioExportTimestampUnit();
+					payload.labeled_span_only = getStudioExportLabeledSpanOnly();
+				}
+				if (studioManagementState.exportSelectedUid) payload.uids = [studioManagementState.exportSelectedUid];
+				if (studioManagementState.exportSelectedTag) payload.trajectory_tags = [studioManagementState.exportSelectedTag];
+				const manifest = await STUDIO_ADMIN_CORE.exportReviewerBundle(apiFetchJson, payload);
+				studioManagementState.exportResult = manifest;
+				if (isDatasetExport) {
+					datasetExportCompleted = true;
+					studioManagementState.exportDatasetProgressPercent = 100;
+					renderStudioExportActionButtons();
+				}
+				if (manifest?.download_url) {
+					STUDIO_ADMIN_CORE.triggerDownload(manifest.download_url, manifest.download_name || `${manifest.bundle_name || bundleName}.zip`);
+				}
+				setStudioExportSummary(
+					isDatasetExport
+						? `数据集导出完成：${manifest?.sample_count || 0} 个 UID，压缩包已开始下载。`
+						: `导出完成：${manifest?.sample_count || 0} 条样本，压缩包已开始下载。`,
+					"success"
+				);
+			} catch (error) {
+				setStudioExportSummary(String(error?.message || error), "error");
+			} finally {
+				if (isDatasetExport && datasetExportStartedAt) {
+					const minPendingMs = 48;
+					const elapsedMs = Date.now() - datasetExportStartedAt;
+					if (elapsedMs < minPendingMs) {
+						await new Promise(resolve => window.setTimeout(resolve, minPendingMs - elapsedMs));
+					}
+				}
+				setStudioManagementBusy(false);
+				if (isDatasetExport) {
+					if (datasetExportCompleted) {
+						studioManagementState.exportDatasetProgressActive = true;
+						studioManagementState.exportDatasetProgressPercent = 100;
+						renderStudioExportActionButtons();
+					}
+					scheduleStudioExportDatasetButtonProgressReset(datasetExportCompleted ? 650 : 0);
+				} else {
+					resetStudioExportDatasetButtonProgress();
+				}
+			}
+		}
+
 		async function syncStudioManagementData() {
 			renderStudioManagementActor();
 			renderStudioManagementUploads();
+			renderStudioExportBatchOptions();
+			renderStudioExportReviewFilters();
 			const results = await Promise.allSettled([
 				loadStudioManagementActor(),
 				loadStudioManagementUploads({ silent: true }),
+				loadStudioExportBatches().then(() => loadStudioExportReviews()),
 			]);
 			const firstRejected = results.find(result => result.status === "rejected");
 			if (firstRejected) {
@@ -539,16 +948,21 @@
 			setStudioManagementFlash("info", `已同步 ${studioManagementState.uploads.length} 条上传记录。`);
 		}
 
-		function openStudioManagement() {
+		function openStudioManagement(workspace = "upload") {
 			const overlay = document.getElementById("studio-management-overlay");
 			if (!overlay) return;
+			const activeWorkspace = workspace === "export" ? "export" : "upload";
 			hideTimeScrubberContextMenu();
 			if (annotationSettingsOverlay?.classList.contains("open")) closeAnnotationSettings();
 			setStudioManagementHelpVisibility(false, { pinned: false });
+			if (activeWorkspace === "export") {
+				resetStudioExportFilters({ preferCurrentBatch: true });
+			}
 			renderStudioManagementHelp();
 			renderStudioManagementCustomFields();
 			overlay.classList.add("open");
 			overlay.setAttribute("aria-hidden", "false");
+			focusStudioManagementWorkspace(activeWorkspace);
 			syncStudioManagementChrome();
 			setStudioManagementFlash("info", "正在同步 Studio 管理数据…");
 			void syncStudioManagementData().catch((error) => {
@@ -560,8 +974,11 @@
 			const overlay = document.getElementById("studio-management-overlay");
 			if (!overlay) return;
 			setStudioManagementHelpVisibility(false, { pinned: false });
+			resetStudioExportDatasetButtonProgress();
 			overlay.classList.remove("open");
 			overlay.setAttribute("aria-hidden", "true");
+			resetStudioExportFilters({ preferCurrentBatch: true });
+			studioManagementState.exportActiveWorkspace = "upload";
 			syncStudioManagementChrome();
 		}
 

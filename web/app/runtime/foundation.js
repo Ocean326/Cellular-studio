@@ -28,7 +28,9 @@
 			const dLonDeg = (dLon * 180) / (a / sqrtMagic * Math.cos(radLat) * Math.PI);
 			return [lat + dLatDeg, lon + dLonDeg];
 		}
-		const toGcj = wgs84ToGcj02;
+		function passthroughLatLon(lat, lon) {
+			return [lat, lon];
+		}
 
 		function deepClone(value) {
 			return JSON.parse(JSON.stringify(value));
@@ -59,9 +61,15 @@
 			DEFAULT_ANNOTATION_CATEGORIES,
 			DEFAULT_LAYER_COLOR_PALETTE,
 			DEFAULT_REVIEW_TAG_OPTIONS,
+			applyMapTileMode,
 			GAODE_TILE,
 			INITIAL_BATCH_NAME,
+			getMapTileConfig,
+			getMapTilePresets,
+			MAP_TILE_CONFIG,
+			MAP_TILE_PRESETS,
 			MAX_BUCKET_DETAIL_ROWS,
+			normalizeTileMode,
 			QUERY,
 			REVIEWER_SESSION_STORAGE_KEY,
 			REVIEW_API_BASE,
@@ -71,6 +79,7 @@
 			STATIC_DATA_BASE,
 			TIMELINE_PINS_STORAGE_KEY,
 			TIMELINE_SEGMENTS_STORAGE_KEY,
+			TRACK_EDITS_STORAGE_KEY,
 			TIME_SCRUBBER_MAX_POINTS,
 			TIME_SCRUBBER_MIN_VISIBLE_POINTS,
 			TIME_SCRUBBER_OVERVIEW_EDGE_PAD,
@@ -80,6 +89,32 @@
 			TRIAGE_STACK_WIDTH_THRESHOLD,
 			WEEKDAY_SHORT,
 		} = trajectoryStudioBootstrap;
+
+		function gcj02ToWgs84(lat, lon) {
+			if (outOfChina(lon, lat)) return [lat, lon];
+			const [adjustedLat, adjustedLon] = wgs84ToGcj02(lat, lon);
+			return [lat * 2 - adjustedLat, lon * 2 - adjustedLon];
+		}
+
+		function getMapTileCoordinateSystem() {
+			return String((typeof getMapTileConfig === "function" ? getMapTileConfig() : MAP_TILE_CONFIG)?.coordinateSystem || "wgs84")
+				.trim()
+				.toLowerCase();
+		}
+
+		function convertLatLonBetweenTileSystems(lat, lon, fromSystem, toSystem) {
+			const from = String(fromSystem || "").trim().toLowerCase() || "wgs84";
+			const to = String(toSystem || "").trim().toLowerCase() || "wgs84";
+			if (from === to) return [lat, lon];
+			if (from === "wgs84" && to === "gcj02") return wgs84ToGcj02(lat, lon);
+			if (from === "gcj02" && to === "wgs84") return gcj02ToWgs84(lat, lon);
+			return [lat, lon];
+		}
+
+		function toGcj(lat, lon) {
+			return convertLatLonBetweenTileSystems(lat, lon, "wgs84", getMapTileCoordinateSystem());
+		}
+
 		const STUDIO_ADMIN_CORE = window.TrajectoryStudioModules?.studioAdminCore;
 		if (!STUDIO_ADMIN_CORE) {
 			throw new Error("studio management core failed to load");
@@ -102,13 +137,18 @@
 		}
 
 		function buildReviewApiUrl(path, extraParams = {}) {
-			const url = new URL(`${REVIEW_API_BASE}${path}`, window.location.origin);
+			const normalizedBase = String(REVIEW_API_BASE || "/api").trim() || "/api";
+			const trimmedBase = normalizedBase.replace(/\/+$/, "");
+			const normalizedPath = `/${String(path || "").replace(/^\/+/, "")}`;
+			const url = new URL(`${trimmedBase}${normalizedPath}`, window.location.origin);
 			if (currentBatchName) url.searchParams.set("batch", currentBatchName);
 			Object.entries(extraParams).forEach(([key, value]) => {
 				if (value == null || value === "") return;
 				url.searchParams.set(key, value);
 			});
-			return `${url.pathname}${url.search}`;
+			return url.origin === window.location.origin
+				? `${url.pathname}${url.search}`
+				: url.href;
 		}
 
 		function loadReviewerSession() {

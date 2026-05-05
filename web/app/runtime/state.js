@@ -39,6 +39,7 @@
 		let currentBatchName = "";
 		let currentBatchMeta = null;
 		let currentManifest = null;
+		let currentBaseRawDataByLayer = {};
 		let currentRawDataByLayer = {};
 		let currentFilteredDataByLayer = {};
 		let timeScrubberStyleContextCache = {
@@ -69,6 +70,19 @@
 		let timeFocusMarker = null;
 		let timelinePinsByTrack = loadTimelineAnnotationStore(TIMELINE_PINS_STORAGE_KEY);
 		let timelineSegmentsByTrack = loadTimelineAnnotationStore(TIMELINE_SEGMENTS_STORAGE_KEY);
+		let trackEditsByTrack = loadTimelineAnnotationStore(TRACK_EDITS_STORAGE_KEY);
+		let replayTimelineState = {
+			enabled: false,
+			uid: "",
+			batchName: "",
+			reviewerId: "",
+			reviewerName: "",
+			pins: [],
+			segments: [],
+			segmentPolicy: null,
+			updatedAt: "",
+			sourceLabel: "",
+		};
 		let timeScrubberContextMenuState = {
 			open: false,
 			pointIndex: null,
@@ -89,6 +103,8 @@
 			selectedLayer: "",
 			focusLayers: [],
 			allPoints: [],
+			hoveredSegmentId: "",
+			selectedSegmentId: "",
 			visibleStartIndex: 0,
 			visibleCount: 0,
 			selectedIndex: 0,
@@ -108,9 +124,53 @@
 			quickSegmentCategoryId: "",
 			enabled: false,
 		};
+		let trackEditState = {
+			enabled: false,
+			selectedPointIds: [],
+			anchorPointId: "",
+			lastTouchedPointId: "",
+			pointRefsById: {},
+			pointIdsByLayer: {},
+			renderedMarkersByPointId: {},
+			selectionLayerKey: "",
+			dragging: false,
+			dragPointId: "",
+			dragOriginDisplayLat: null,
+			dragOriginDisplayLon: null,
+			dragSnapshot: [],
+			dragSuppressClickUntil: 0,
+			contextMenuOpen: false,
+			contextPointId: "",
+			contextField: "",
+			contextValue: "",
+			statusMessage: "编辑关闭",
+			statusTone: "idle",
+			lastSavedAt: "",
+			undoStack: [],
+			redoStack: [],
+			dirty: false,
+			showCoordinates: false,
+			spaceModifierActive: false,
+			scrollWheelSuppressed: false,
+			saveMenuOpen: false,
+			savedBaselineSignature: "",
+		};
 		let studioManagementState = {
 			actor: null,
 			uploads: [],
+			exportBatches: [],
+			exportReviewsByBatch: {},
+			exportActiveWorkspace: "upload",
+			exportSelectedBatch: "",
+			exportSelectedUid: "",
+			exportSelectedTag: "",
+			exportSelectedDecisions: ["accept", "reject", "skip"],
+			exportBusy: false,
+			exportDatasetProgressActive: false,
+			exportDatasetProgressPercent: 0,
+			exportDatasetProgressTimerId: 0,
+			exportDatasetProgressResetTimerId: 0,
+			exportResult: null,
 			busy: false,
 			lastRefreshAt: "",
 			progressVisible: false,

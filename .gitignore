@@ -21,6 +21,7 @@ __pycache__/
 dist/
 build/
 .cache/
+.codex_run/
 tmp/
 logs/
 coverage/
@@ -39,3 +40,5 @@ configs/local/
 # Local backups / experiments
 _backup_*/
 scratch/
+*.runtime.log
+.runtime_*.log

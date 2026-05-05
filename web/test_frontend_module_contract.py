@@ -29,7 +29,11 @@ const required = [
   "parseRawPayload",
   "createUploadRecord",
   "fetchActor",
+  "fetchBatches",
+  "fetchReviewerReviews",
   "fetchUploads",
+  "exportReviewerBundle",
+  "triggerDownload",
   "uploadBlob"
 ];
 for (const name of required) {{

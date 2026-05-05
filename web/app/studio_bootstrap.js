@@ -167,7 +167,73 @@
 		`
 	};
 
-	const GAODE_TILE = "https://webrd02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}";
+	function cloneJsonCompatible(value) {
+		return JSON.parse(JSON.stringify(value));
+	}
+
+	function normalizeTileMode(value) {
+		const text = String(value || "").trim().toLowerCase();
+		if (!text) return "";
+		if (text === "gaode") return "online";
+		if (text === "local") return "offline";
+		if (text === "lan") return "intranet";
+		return text;
+	}
+
+	const runtimeConfig = window.TrajectoryStudioRuntimeConfig || {};
+	const TILE_MODE_STORAGE_KEY = String(runtimeConfig.storageKeys?.tileMode || "trajectoryStudioTileModeV1");
+	const MAP_TILE_PRESETS = cloneJsonCompatible(runtimeConfig.tilePresets || {});
+	const MAP_TILE_CONFIG = {
+		mode: String(runtimeConfig.tileMode || "online"),
+		url: String(runtimeConfig.tileUrl || "/offline_tiles/beijing/{z}/{x}/{y}.png"),
+		attribution: String(runtimeConfig.tileAttribution || "Offline Beijing Basemap"),
+		coordinateSystem: String(runtimeConfig.tileCoordinateSystem || "wgs84").toLowerCase(),
+		minZoom: Number.isFinite(Number(runtimeConfig.tileMinZoom)) ? Number(runtimeConfig.tileMinZoom) : 3,
+		maxNativeZoom: Number.isFinite(Number(runtimeConfig.tileMaxNativeZoom)) ? Number(runtimeConfig.tileMaxNativeZoom) : 16,
+		maxZoom: Number.isFinite(Number(runtimeConfig.tileMaxZoom)) ? Number(runtimeConfig.tileMaxZoom) : 18,
+		bounds: Array.isArray(runtimeConfig.tileBounds) ? cloneJsonCompatible(runtimeConfig.tileBounds) : [[39.4, 115.4], [41.1, 117.5]],
+		errorTileUrl: String(runtimeConfig.tileErrorTileUrl || "/web/assets/blank_tile.png"),
+		mapCenter: Array.isArray(runtimeConfig.mapCenter) ? cloneJsonCompatible(runtimeConfig.mapCenter) : [39.9, 116.4],
+		mapZoom: Number.isFinite(Number(runtimeConfig.mapZoom)) ? Number(runtimeConfig.mapZoom) : 11,
+		detectRetina: Boolean(runtimeConfig.tileDetectRetina),
+	};
+	const GAODE_TILE = MAP_TILE_CONFIG.url;
+
+	function getMapTilePresets() {
+		return MAP_TILE_PRESETS;
+	}
+
+	function getMapTileConfig() {
+		return MAP_TILE_CONFIG;
+	}
+
+	function persistTileMode(mode) {
+		try {
+			window.localStorage?.setItem(TILE_MODE_STORAGE_KEY, mode);
+		} catch (_) {}
+	}
+
+	function applyMapTileMode(nextMode, options = {}) {
+		const normalizedMode = normalizeTileMode(nextMode) || normalizeTileMode(MAP_TILE_CONFIG.mode) || "online";
+		const preset = MAP_TILE_PRESETS[normalizedMode] || MAP_TILE_PRESETS.online || MAP_TILE_PRESETS.offline || null;
+		if (!preset) return MAP_TILE_CONFIG;
+		MAP_TILE_CONFIG.mode = normalizedMode;
+		MAP_TILE_CONFIG.url = String(preset.url || MAP_TILE_CONFIG.url || "").trim();
+		MAP_TILE_CONFIG.attribution = String(preset.attribution || "").trim();
+		MAP_TILE_CONFIG.coordinateSystem = String(preset.coordinateSystem || "wgs84").trim().toLowerCase();
+		MAP_TILE_CONFIG.minZoom = Number.isFinite(Number(preset.minZoom)) ? Number(preset.minZoom) : 3;
+		MAP_TILE_CONFIG.maxNativeZoom = Number.isFinite(Number(preset.maxNativeZoom)) ? Number(preset.maxNativeZoom) : MAP_TILE_CONFIG.minZoom;
+		MAP_TILE_CONFIG.maxZoom = Number.isFinite(Number(preset.maxZoom)) ? Number(preset.maxZoom) : MAP_TILE_CONFIG.maxNativeZoom;
+		MAP_TILE_CONFIG.bounds = Array.isArray(preset.bounds) ? cloneJsonCompatible(preset.bounds) : [[39.4, 115.4], [41.1, 117.5]];
+		MAP_TILE_CONFIG.errorTileUrl = String(preset.errorTileUrl || MAP_TILE_CONFIG.errorTileUrl || "/web/assets/blank_tile.png").trim();
+		MAP_TILE_CONFIG.mapCenter = Array.isArray(preset.mapCenter) ? cloneJsonCompatible(preset.mapCenter) : [39.9, 116.4];
+		MAP_TILE_CONFIG.mapZoom = Number.isFinite(Number(preset.mapZoom)) ? Number(preset.mapZoom) : 11;
+		MAP_TILE_CONFIG.detectRetina = Boolean(preset.detectRetina);
+		if (options.persist !== false) persistTileMode(normalizedMode);
+		return MAP_TILE_CONFIG;
+	}
+
+	applyMapTileMode(MAP_TILE_CONFIG.mode, { persist: false });
 	const QUERY = new URLSearchParams(window.location.search);
 	const STATIC_DATA_BASE = QUERY.get("resultRoot") || "";
 	const REVIEW_API_BASE = QUERY.get("reviewApi") || "/api";
@@ -186,6 +252,7 @@
 	const ANNOTATION_SETTINGS_STORAGE_KEY = "trajectoryAnnotationSettingsV2";
 	const TIMELINE_PINS_STORAGE_KEY = "trajectoryTimelinePinsV2";
 	const TIMELINE_SEGMENTS_STORAGE_KEY = "trajectoryTimelineSegmentsV2";
+	const TRACK_EDITS_STORAGE_KEY = "trajectoryTrackEditsV1";
 	const DEFAULT_ANNOTATION_CATEGORIES = [
 		{ id: "focus-segment", name: "重点段", color: "#60a5fa" },
 		{ id: "review-segment", name: "待复核", color: "#f59e0b" },
@@ -211,7 +278,7 @@
 		reject: "排除",
 		skip: "跳过",
 	};
-	const SHOW_REVIEW_AGGREGATE = false;
+	const SHOW_REVIEW_AGGREGATE = true;
 
 	window.TrajectoryStudioBootstrap = Object.freeze({
 		ANNOTATION_SETTINGS_STORAGE_KEY,
@@ -219,12 +286,19 @@
 		CACHE_MAX,
 		CHAIN2_TRIAGE_COLUMNS,
 		CHAIN2_UI_PRESET,
-		DEFAULT_ANNOTATION_CATEGORIES,
-		DEFAULT_LAYER_COLOR_PALETTE,
-		DEFAULT_REVIEW_TAG_OPTIONS,
-		GAODE_TILE,
-		INITIAL_BATCH_NAME,
-		MAX_BUCKET_DETAIL_ROWS,
+			DEFAULT_ANNOTATION_CATEGORIES,
+			DEFAULT_LAYER_COLOR_PALETTE,
+			DEFAULT_REVIEW_TAG_OPTIONS,
+			GAODE_TILE,
+			INITIAL_BATCH_NAME,
+			applyMapTileMode,
+			TILE_MODE_STORAGE_KEY,
+			getMapTileConfig,
+			getMapTilePresets,
+			MAP_TILE_CONFIG,
+			MAP_TILE_PRESETS,
+			MAX_BUCKET_DETAIL_ROWS,
+			normalizeTileMode,
 		QUERY,
 		REVIEWER_SESSION_STORAGE_KEY,
 		REVIEW_API_BASE,
@@ -234,6 +308,7 @@
 		STATIC_DATA_BASE,
 		TIMELINE_PINS_STORAGE_KEY,
 		TIMELINE_SEGMENTS_STORAGE_KEY,
+		TRACK_EDITS_STORAGE_KEY,
 		TIME_SCRUBBER_MAX_POINTS,
 		TIME_SCRUBBER_MIN_VISIBLE_POINTS,
 		TIME_SCRUBBER_OVERVIEW_EDGE_PAD,
