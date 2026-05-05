@@ -1,0 +1,80 @@
+{
+  "ui_mode": "trajectory_layers",
+  "title": "Research Arena V1.5 GPS + Tier1-4 对照",
+  "search_placeholder": "搜索 UID / sample_id / tier 样本...",
+  "filter_title": "按同轨迹多层对照浏览",
+  "hide_review_panel": true,
+  "review_reference_files": [],
+  "time_scrubber_preferred_layers": ["gps", "tier4", "tier3", "tier2", "tier1"],
+  "uids": ["1011509"],
+  "layers": ["gps", "tier1", "tier2", "tier3", "tier4"],
+  "layer_labels": {
+    "gps": "GPS 真值",
+    "tier1": "Tier-1 Starter",
+    "tier2": "Tier-2 Structural",
+    "tier3": "Tier-3 Bursty",
+    "tier4": "Tier-4 Realistic"
+  },
+  "layer_specs": {
+    "gps": {
+      "filename": "gps.csv",
+      "kind": "gps",
+      "hasLine": true,
+      "defaultColor": "#0f766e",
+      "defaultOpacity": 0.85
+    },
+    "tier1": {
+      "filename": "tier1.csv",
+      "kind": "signal",
+      "hasLine": true,
+      "defaultColor": "#475569",
+      "defaultOpacity": 0.72
+    },
+    "tier2": {
+      "filename": "tier2.csv",
+      "kind": "signal",
+      "hasLine": true,
+      "defaultColor": "#2563eb",
+      "defaultOpacity": 0.72
+    },
+    "tier3": {
+      "filename": "tier3.csv",
+      "kind": "signal",
+      "hasLine": true,
+      "defaultColor": "#ea580c",
+      "defaultOpacity": 0.78
+    },
+    "tier4": {
+      "filename": "tier4.csv",
+      "kind": "signal",
+      "hasLine": true,
+      "defaultColor": "#7c3aed",
+      "defaultOpacity": 0.82
+    }
+  },
+  "layer_sources": {
+    "gps": {
+      "source_type": "truth"
+    },
+    "tier1": {
+      "source_type": "raw6",
+      "split_dir": "tier0-starter",
+      "tier_weight": 0.2
+    },
+    "tier2": {
+      "source_type": "raw6",
+      "split_dir": "tier1-structural",
+      "tier_weight": 0.3
+    },
+    "tier3": {
+      "source_type": "raw6",
+      "split_dir": "tier2-bursty",
+      "tier_weight": 0.3
+    },
+    "tier4": {
+      "source_type": "raw6",
+      "split_dir": "tier3-realistic",
+      "tier_weight": 0.2
+    }
+  }
+}

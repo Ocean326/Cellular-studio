@@ -1,0 +1,23 @@
+server {
+    listen 443 ssl http2;
+    server_name annotation.example.com;
+
+    # TLS and auth are intentionally handled here, not by review_server.py.
+    # Example:
+    # ssl_certificate /etc/letsencrypt/live/annotation.example.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/annotation.example.com/privkey.pem;
+    # auth_basic "Trajectory Annotation";
+    # auth_basic_user_file /etc/nginx/.htpasswd-trajectory-annotation;
+
+    client_max_body_size 2048m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8016;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+}

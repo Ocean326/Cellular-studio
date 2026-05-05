@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -16,7 +15,7 @@ DEFAULT_PORT = 8016
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Start trajectory_annotation_studio against the shared cellular_quality review_batches root."
+        description="Start trajectory_annotation_studio against a shared review_batches root."
     )
     parser.add_argument("--host", default="127.0.0.1", help="Bind host.")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Bind port.")
@@ -38,14 +37,21 @@ def main() -> int:
     project_root = Path(args.project_root).expanduser().resolve()
     batches_root = Path(args.batches_root).expanduser().resolve()
     review_server = project_root / "web" / "review_server.py"
+    module_name = f"{project_root.name}.web.review_server"
     if not review_server.exists():
         raise FileNotFoundError(f"review_server.py not found: {review_server}")
     if not batches_root.exists():
         raise FileNotFoundError(f"Batches root not found: {batches_root}")
 
+    env = os.environ.copy()
+    pythonpath_parts = [str(project_root.parent)]
+    if env.get("PYTHONPATH"):
+        pythonpath_parts.append(env["PYTHONPATH"])
+    env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
     cmd = [
         sys.executable,
-        str(review_server),
+        "-m",
+        module_name,
         "--host",
         args.host,
         "--port",
@@ -60,7 +66,7 @@ def main() -> int:
         f"(batches_root={batches_root})",
         flush=True,
     )
-    os.execv(sys.executable, cmd)
+    os.execve(sys.executable, cmd, env)
     return 0
 
 

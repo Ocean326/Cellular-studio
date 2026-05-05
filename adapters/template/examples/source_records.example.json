@@ -1,0 +1,40 @@
+{
+  "dataset_name": "demo_points",
+  "label": "Demo Points Batch",
+  "samples": [
+    {
+      "uid": "1001",
+      "points": [
+        {
+          "latitude": 39.9,
+          "longitude": 116.3,
+          "timestamp_ms": 1711929600000,
+          "state": "road"
+        },
+        {
+          "latitude": 39.9005,
+          "longitude": 116.301,
+          "timestamp_ms": 1711929660000,
+          "state": "stay"
+        }
+      ]
+    },
+    {
+      "uid": "1002",
+      "points": [
+        {
+          "lat": 39.91,
+          "lon": 116.32,
+          "timestamp_ms": 1711929720000,
+          "state": "road"
+        },
+        {
+          "lat": 39.912,
+          "lon": 116.321,
+          "timestamp_ms": 1711929780000,
+          "state": "subway"
+        }
+      ]
+    }
+  ]
+}

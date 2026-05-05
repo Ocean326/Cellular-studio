@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trajectory Annotation Studio Upload Center</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg-top: #f7f1e3;
+      --bg-bottom: #efe4d2;
+      --panel: rgba(255, 251, 244, 0.82);
+      --panel-strong: rgba(255, 252, 246, 0.94);
+      --panel-muted: rgba(255, 248, 237, 0.72);
+      --border: rgba(176, 150, 117, 0.22);
+      --border-strong: rgba(144, 114, 72, 0.28);
+      --text: #2b2318;
+      --muted: #73614d;
+      --accent: #8b592d;
+      --accent-strong: #724521;
+      --accent-soft: rgba(139, 89, 45, 0.12);
+      --success: #2d6b4c;
+      --success-soft: rgba(45, 107, 76, 0.12);
+      --warning: #9b6a1c;
+      --warning-soft: rgba(155, 106, 28, 0.12);
+      --danger: #9c3b3b;
+      --danger-soft: rgba(156, 59, 59, 0.12);
+      --shadow: 0 16px 44px rgba(73, 45, 17, 0.1);
+      font-family: "IBM Plex Sans", "Noto Sans SC", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(255, 240, 214, 0.9), transparent 32%),
+        radial-gradient(circle at right 12%, rgba(255, 250, 241, 0.7), transparent 26%),
+        linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    }
+
+    a {
+      color: inherit;
+    }
+
+    main {
+      width: min(1220px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 26px 0 36px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .hero-card {
+      padding: 24px 26px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      inset: auto -8% -32% auto;
+      width: 230px;
+      height: 230px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255, 230, 199, 0.65) 0%, rgba(255, 230, 199, 0) 72%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.38);
+      border: 1px solid rgba(139, 89, 45, 0.14);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    h1 {
+      margin: 14px 0 10px;
+      font-size: clamp(30px, 4vw, 38px);
+      line-height: 1.12;
+    }
+
+    .lead {
+      margin: 0;
+      max-width: 760px;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 15px;
+    }
+
+    .hero-meta {
+      margin-top: 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 36px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.5);
+      border: 1px solid rgba(139, 89, 45, 0.14);
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .actor-card {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      justify-content: space-between;
+      background: var(--panel-strong);
+    }
+
+    .actor-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .actor-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(139, 89, 45, 0.14), rgba(139, 89, 45, 0.08));
+      border: 1px solid rgba(139, 89, 45, 0.12);
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--accent-strong);
+    }
+
+    .actor-name {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .actor-subtext {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .actor-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .mini-stat {
+      padding: 12px 13px;
+      border-radius: 16px;
+      background: var(--panel-muted);
+      border: 1px solid rgba(139, 89, 45, 0.1);
+    }
+
+    .mini-stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .mini-stat-value {
+      font-size: 14px;
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.3fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel-body {
+      padding: 20px;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .panel-note {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .field-hint {
+      margin-top: -2px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    select,
+    input[type="file"],
+    input[type="text"] {
+      width: 100%;
+      min-height: 46px;
+      padding: 11px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(139, 89, 45, 0.16);
+      background: rgba(255, 255, 255, 0.56);
+      color: var(--text);
+      font: inherit;
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+
+    select:focus,
+    input[type="file"]:focus,
+    input[type="text"]:focus {
+      border-color: rgba(139, 89, 45, 0.42);
+      box-shadow: 0 0 0 4px rgba(139, 89, 45, 0.08);
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    input[type="file"] {
+      padding: 10px 12px;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      min-height: 42px;
+      padding: 10px 16px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.12s ease, opacity 0.12s ease, background 0.18s ease;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+      transform: none;
+    }
+
+    .primary-btn {
+      background: linear-gradient(180deg, #8f5f31 0%, #774820 100%);
+      color: #fff9f1;
+      box-shadow: 0 10px 20px rgba(121, 74, 34, 0.18);
+    }
+
+    .secondary-btn {
+      background: rgba(139, 89, 45, 0.1);
+      color: var(--text);
+      border: 1px solid rgba(139, 89, 45, 0.12);
+    }
+
+    .danger-btn {
+      background: rgba(156, 59, 59, 0.1);
+      color: var(--danger);
+      border: 1px solid rgba(156, 59, 59, 0.14);
+    }
+
+    .status-banner {
+      display: none;
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid transparent;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .status-banner.visible {
+      display: block;
+    }
+
+    .status-banner.info {
+      background: rgba(139, 89, 45, 0.08);
+      border-color: rgba(139, 89, 45, 0.12);
+      color: var(--text);
+    }
+
+    .status-banner.success {
+      background: var(--success-soft);
+      border-color: rgba(45, 107, 76, 0.16);
+      color: var(--success);
+    }
+
+    .status-banner.error {
+      background: var(--danger-soft);
+      border-color: rgba(156, 59, 59, 0.16);
+      color: var(--danger);
+    }
+
+    .helper-card {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.46);
+      border: 1px solid rgba(139, 89, 45, 0.12);
+    }
+
+    .helper-card + .helper-card {
+      margin-top: 12px;
+    }
+
+    .helper-title {
+      margin: 0 0 8px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .helper-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    .list-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .inline-code {
+      font-family: "SFMono-Regular", "Consolas", monospace;
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: rgba(67, 49, 31, 0.08);
+    }
+
+    .uploads-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .upload-item {
+      padding: 16px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.48);
+      border: 1px solid rgba(139, 89, 45, 0.12);
+    }
+
+    .upload-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .upload-title-wrap {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .upload-name {
+      font-size: 16px;
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .upload-id {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background: rgba(255, 255, 255, 0.5);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .chip.status-uploaded,
+    .chip.status-created {
+      background: rgba(139, 89, 45, 0.1);
+      color: var(--accent-strong);
+      border-color: rgba(139, 89, 45, 0.12);
+    }
+
+    .chip.status-processing,
+    .chip.status-validating,
+    .chip.status-queued {
+      background: var(--warning-soft);
+      color: var(--warning);
+      border-color: rgba(155, 106, 28, 0.16);
+    }
+
+    .chip.status-published,
+    .chip.status-completed,
+    .chip.status-asset_ready {
+      background: var(--success-soft);
+      color: var(--success);
+      border-color: rgba(45, 107, 76, 0.16);
+    }
+
+    .chip.status-failed,
+    .chip.status-error,
+    .chip.status-deleted {
+      background: var(--danger-soft);
+      color: var(--danger);
+      border-color: rgba(156, 59, 59, 0.16);
+    }
+
+    .upload-grid {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .upload-meta-card {
+      padding: 12px 13px;
+      border-radius: 16px;
+      background: rgba(255, 251, 246, 0.78);
+      border: 1px solid rgba(139, 89, 45, 0.09);
+    }
+
+    .upload-meta-label {
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .upload-meta-value {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .upload-actions {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .empty-state {
+      padding: 28px 20px;
+      border-radius: 20px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.4);
+      border: 1px dashed rgba(139, 89, 45, 0.2);
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .error-text {
+      margin-top: 10px;
+      padding: 11px 12px;
+      border-radius: 14px;
+      background: rgba(156, 59, 59, 0.08);
+      color: var(--danger);
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 980px) {
+      .hero,
+      .content-grid,
+      .form-grid,
+      .upload-grid,
+      .actor-grid {
+        grid-template-columns: 1fr;
+      }
+
+      main {
+        width: min(100%, calc(100% - 24px));
+        padding-top: 18px;
+      }
+
+      .hero-card,
+      .actor-card,
+      .panel-body {
+        padding: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div class="panel hero-card">
+        <span class="eyebrow">Upload Center</span>
+        <h1>把你的轨迹或信令，接入到当前 Studio 工作流。</h1>
+        <p class="lead">
+          这里负责创建上传、提交原始文件、触发处理、查看我的任务，并在产出 batch 后直接打开到 studio。
+          页面只面向用户侧操作，不承担后端编排与权限实现。
+        </p>
+        <div class="hero-meta">
+          <span class="pill">支持类型: <strong>trajectory4</strong> / <strong>signal6</strong></span>
+          <span class="pill">可见性: <strong>仅自己</strong> / <strong>公开</strong></span>
+          <span class="pill">标注策略: <strong>仅查看</strong> / <strong>可标注</strong></span>
+        </div>
+      </div>
+
+      <aside class="panel actor-card">
+        <div class="actor-head">
+          <span class="section-label">Current Actor</span>
+          <span class="actor-badge" id="actorBadge">…</span>
+        </div>
+        <div>
+          <p class="actor-name" id="actorName">读取中</p>
+          <div class="actor-subtext" id="actorDescription">正在从 <span class="inline-code">/api/me</span> 读取当前身份。</div>
+        </div>
+        <div class="actor-grid">
+          <div class="mini-stat">
+            <div class="mini-stat-label">Actor ID</div>
+            <div class="mini-stat-value" id="actorId">-</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Role</div>
+            <div class="mini-stat-value" id="actorRole">-</div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="content-grid">
+      <div class="stack">
+        <section class="panel">
+          <div class="panel-body">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">新建上传</h2>
+                <p class="panel-note">先创建上传记录并提交原始文件，再由你决定是否立即触发处理。</p>
+              </div>
+            </div>
+
+            <form id="uploadForm" class="form-grid">
+              <div class="field">
+                <label for="uploadType">上传类型</label>
+                <select id="uploadType" name="uploadType">
+                  <option value="trajectory4">trajectory4</option>
+                  <option value="signal6">signal6</option>
+                </select>
+                <div class="field-hint">4 元组轨迹或 6 元组信令，最终都由后端转换为 studio 可消费的 batch。</div>
+              </div>
+
+              <div class="field">
+                <label for="visibilityScope">可见性</label>
+                <select id="visibilityScope" name="visibilityScope">
+                  <option value="private">仅自己</option>
+                  <option value="public">公开</option>
+                </select>
+                <div class="field-hint">这里只表达请求策略，真正权限控制由后端决定。</div>
+              </div>
+
+              <div class="field">
+                <label for="annotationMode">标注模式</label>
+                <select id="annotationMode" name="annotationMode">
+                  <option value="view_only">仅查看</option>
+                  <option value="annotatable">可标注</option>
+                </select>
+                <div class="field-hint">处理完成后，若后端允许，可直接跳转到对应 batch 继续工作。</div>
+              </div>
+
+              <div class="field">
+                <label for="displayName">展示名</label>
+                <input id="displayName" name="displayName" type="text" placeholder="可选；默认使用文件名" />
+                <div class="field-hint">用于提升列表可读性；后端也可以忽略这个字段并自行生成名称。</div>
+              </div>
+
+              <div class="field full">
+                <label for="uploadFile">原始文件</label>
+                <input id="uploadFile" name="uploadFile" type="file" />
+                <div class="field-hint">前端会直接把文件发送到 <span class="inline-code">/api/uploads/&lt;id&gt;/blob</span>。</div>
+              </div>
+            </form>
+
+            <div class="actions" style="margin-top: 16px;">
+              <button id="createUploadButton" class="primary-btn" type="button">上传文件</button>
+              <button id="createAndProcessButton" class="secondary-btn" type="button">上传并处理</button>
+              <button id="resetFormButton" class="secondary-btn" type="button">重置表单</button>
+            </div>
+
+            <div id="flash" class="status-banner info" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-body">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">使用说明</h2>
+                <p class="panel-note">这页是最小前端壳，默认按你提供的 API 契约工作。</p>
+              </div>
+            </div>
+
+            <div class="helper-card">
+              <h3 class="helper-title">推荐流程</h3>
+              <ol class="helper-list">
+                <li>选择类型、可见性、标注模式，并提交原始文件。</li>
+                <li>在“我的上传”中确认状态，再按需触发处理。</li>
+                <li>如果后端返回了 batch 名称，就可以直接打开 studio。</li>
+              </ol>
+            </div>
+
+            <div class="helper-card">
+              <h3 class="helper-title">状态提示</h3>
+              <ul class="helper-list">
+                <li><strong>uploaded / created</strong>：记录已创建，通常表示文件已提交或等待下一步。</li>
+                <li><strong>queued / validating / processing</strong>：后端正在接手处理。</li>
+                <li><strong>published / completed</strong>：可尝试直接打开对应 batch。</li>
+                <li><strong>failed / error</strong>：查看错误摘要，必要时删除后重传。</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel">
+        <div class="panel-body">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title">我的上传</h2>
+              <p class="panel-note">列表从 <span class="inline-code">/api/uploads</span> 拉取。支持刷新、触发处理、删除和打开对应批次。</p>
+            </div>
+            <div class="actions">
+              <button id="refreshUploadsButton" class="secondary-btn" type="button">刷新列表</button>
+            </div>
+          </div>
+
+          <div class="list-meta">
+            <span id="uploadCount">0 条上传</span>
+            <span id="lastRefreshText">尚未刷新</span>
+          </div>
+
+          <div id="uploadsList" class="uploads-list" style="margin-top: 16px;"></div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      actor: null,
+      uploads: [],
+      busy: false
+    };
+
+    const actorBadge = document.getElementById("actorBadge");
+    const actorName = document.getElementById("actorName");
+    const actorDescription = document.getElementById("actorDescription");
+    const actorId = document.getElementById("actorId");
+    const actorRole = document.getElementById("actorRole");
+    const uploadType = document.getElementById("uploadType");
+    const visibilityScope = document.getElementById("visibilityScope");
+    const annotationMode = document.getElementById("annotationMode");
+    const displayNameInput = document.getElementById("displayName");
+    const uploadFileInput = document.getElementById("uploadFile");
+    const createUploadButton = document.getElementById("createUploadButton");
+    const createAndProcessButton = document.getElementById("createAndProcessButton");
+    const resetFormButton = document.getElementById("resetFormButton");
+    const refreshUploadsButton = document.getElementById("refreshUploadsButton");
+    const uploadsList = document.getElementById("uploadsList");
+    const uploadCount = document.getElementById("uploadCount");
+    const lastRefreshText = document.getElementById("lastRefreshText");
+    const flash = document.getElementById("flash");
+
+    function showFlash(kind, message) {
+      flash.className = `status-banner ${kind} visible`;
+      flash.textContent = message;
+    }
+
+    function hideFlash() {
+      flash.className = "status-banner info";
+      flash.textContent = "";
+    }
+
+    function setBusy(busy) {
+      state.busy = Boolean(busy);
+      createUploadButton.disabled = state.busy;
+      createAndProcessButton.disabled = state.busy;
+      refreshUploadsButton.disabled = state.busy;
+    }
+
+    function pickFirstString(...values) {
+      for (const value of values) {
+        if (typeof value === "string" && value.trim()) {
+          return value.trim();
+        }
+      }
+      return "";
+    }
+
+    function firstArray(payload) {
+      if (Array.isArray(payload)) {
+        return payload;
+      }
+      if (Array.isArray(payload && payload.items)) {
+        return payload.items;
+      }
+      if (Array.isArray(payload && payload.uploads)) {
+        return payload.uploads;
+      }
+      return [];
+    }
+
+    async function readPayload(response) {
+      const rawText = await response.text();
+      if (!rawText) {
+        return {};
+      }
+      try {
+        return JSON.parse(rawText);
+      } catch (error) {
+        return { raw: rawText };
+      }
+    }
+
+    async function apiFetch(url, options = {}) {
+      const response = await fetch(url, {
+        credentials: "same-origin",
+        ...options
+      });
+      const payload = await readPayload(response);
+      if (!response.ok) {
+        throw new Error(
+          pickFirstString(
+            payload && payload.error,
+            payload && payload.message,
+            payload && payload.detail,
+            typeof payload.raw === "string" ? payload.raw : "",
+            `请求失败: ${response.status}`
+          )
+        );
+      }
+      return payload;
+    }
+
+    function formatTime(value) {
+      if (!value) {
+        return "-";
+      }
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return String(value);
+      }
+      return date.toLocaleString("zh-CN", { hour12: false });
+    }
+
+    function formatBytes(value) {
+      if (!Number.isFinite(value) || value < 0) {
+        return "-";
+      }
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let size = value;
+      let index = 0;
+      while (size >= 1024 && index < units.length - 1) {
+        size /= 1024;
+        index += 1;
+      }
+      const digits = size >= 100 || index === 0 ? 0 : 1;
+      return `${size.toFixed(digits)} ${units[index]}`;
+    }
+
+    function statusClass(status) {
+      const normalized = String(status || "").toLowerCase();
+      if (!normalized) {
+        return "status-uploaded";
+      }
+      if (normalized.includes("fail") || normalized.includes("error") || normalized.includes("delete")) {
+        return "status-failed";
+      }
+      if (normalized.includes("publish") || normalized.includes("complete") || normalized.includes("ready")) {
+        return "status-published";
+      }
+      if (normalized.includes("queue") || normalized.includes("valid") || normalized.includes("process")) {
+        return "status-processing";
+      }
+      return `status-${normalized.replace(/[^a-z0-9_]+/g, "_")}`;
+    }
+
+    function resolveActor(payload) {
+      const actorPayload = payload && typeof payload === "object" ? payload : {};
+      const id = pickFirstString(
+        actorPayload.actor_id,
+        actorPayload.user_id,
+        actorPayload.id,
+        actorPayload.username,
+        actorPayload.login
+      ) || "-";
+      const name = pickFirstString(
+        actorPayload.display_name,
+        actorPayload.name,
+        actorPayload.username,
+        actorPayload.login,
+        actorPayload.actor_id,
+        actorPayload.user_id
+      ) || "未识别身份";
+      const role = pickFirstString(actorPayload.role, actorPayload.actor_role, actorPayload.type) || "unknown";
+      return {
+        raw: actorPayload,
+        id,
+        name,
+        role,
+        description: pickFirstString(actorPayload.description, actorPayload.email)
+      };
+    }
+
+    function renderActor() {
+      if (!state.actor) {
+        actorBadge.textContent = "?";
+        actorName.textContent = "未加载";
+        actorDescription.textContent = "尚未从 /api/me 获取身份。";
+        actorId.textContent = "-";
+        actorRole.textContent = "-";
+        return;
+      }
+      actorBadge.textContent = state.actor.name.slice(0, 1).toUpperCase();
+      actorName.textContent = state.actor.name;
+      actorDescription.textContent = state.actor.description || "当前页面会以这个 actor 身份请求上传与列表 API。";
+      actorId.textContent = state.actor.id;
+      actorRole.textContent = state.actor.role;
+    }
+
+    function normalizeUpload(item) {
+      const upload = item && typeof item === "object" ? item : {};
+      const batchName = pickFirstString(
+        upload.batch_name,
+        upload.published_batch_name,
+        upload.publication_batch_name,
+        upload.publication && upload.publication.batch_name,
+        upload.batch && upload.batch.name,
+        upload.result && upload.result.batch_name
+      );
+      const uploadId = pickFirstString(upload.upload_id, upload.id);
+      const status = pickFirstString(upload.status, upload.lifecycle_status) || "created";
+      return {
+        raw: upload,
+        uploadId,
+        displayName: pickFirstString(upload.display_name, upload.original_name, upload.filename, upload.safe_name, uploadId) || "-",
+        originalName: pickFirstString(upload.original_name, upload.filename, upload.safe_name) || "-",
+        uploadType: pickFirstString(upload.upload_type, upload.source_kind, upload.type) || "-",
+        visibility: pickFirstString(upload.visibility_scope, upload.visibility, upload.requested_visibility) || "-",
+        annotation: pickFirstString(upload.annotation_mode, upload.annotation, upload.annotation_enabled ? "annotatable" : "") || "-",
+        status,
+        batchName,
+        sizeBytes: Number.isFinite(upload.size_bytes) ? upload.size_bytes : Number(upload.size_bytes),
+        createdAt: pickFirstString(upload.created_at, upload.updated_at),
+        updatedAt: pickFirstString(upload.updated_at, upload.processed_at, upload.published_at),
+        errorText: pickFirstString(upload.error, upload.error_summary, upload.error_message, upload.failure_reason),
+        note: pickFirstString(upload.note, upload.validation_summary, upload.message)
+      };
+    }
+
+    function createActionButton(label, className, onClick, disabled) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.className = className;
+      button.disabled = Boolean(disabled);
+      button.addEventListener("click", onClick);
+      return button;
+    }
+
+    function uploadCanOpen(upload) {
+      return Boolean(upload.batchName);
+    }
+
+    function uploadCanProcess(upload) {
+      const status = String(upload.status || "").toLowerCase();
+      if (!upload.uploadId) {
+        return false;
+      }
+      return !status.includes("process") &&
+        !status.includes("publish") &&
+        !status.includes("complete") &&
+        !status.includes("delete");
+    }
+
+    function renderUploads() {
+      uploadsList.innerHTML = "";
+      uploadCount.textContent = `${state.uploads.length} 条上传`;
+      lastRefreshText.textContent = `上次刷新: ${new Date().toLocaleString("zh-CN", { hour12: false })}`;
+
+      if (!state.uploads.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.textContent = "当前还没有上传记录。先在左侧创建一条新的上传，列表会自动刷新。";
+        uploadsList.appendChild(empty);
+        return;
+      }
+
+      for (const upload of state.uploads) {
+        const item = document.createElement("article");
+        item.className = "upload-item";
+
+        const top = document.createElement("div");
+        top.className = "upload-top";
+
+        const titleWrap = document.createElement("div");
+        titleWrap.className = "upload-title-wrap";
+        titleWrap.innerHTML = `
+          <div class="upload-name">${escapeHtml(upload.displayName)}</div>
+          <div class="upload-id">Upload ID: <span class="inline-code">${escapeHtml(upload.uploadId || "-")}</span></div>
+        `;
+
+        const chips = document.createElement("div");
+        chips.className = "chips";
+        chips.innerHTML = `
+          <span class="chip ${statusClass(upload.status)}">${escapeHtml(upload.status || "created")}</span>
+          <span class="chip">${escapeHtml(upload.uploadType)}</span>
+          <span class="chip">${escapeHtml(upload.visibility)}</span>
+          <span class="chip">${escapeHtml(upload.annotation)}</span>
+        `;
+
+        titleWrap.appendChild(chips);
+        top.appendChild(titleWrap);
+        item.appendChild(top);
+
+        const metaGrid = document.createElement("div");
+        metaGrid.className = "upload-grid";
+        metaGrid.innerHTML = `
+          <div class="upload-meta-card">
+            <div class="upload-meta-label">原始文件</div>
+            <div class="upload-meta-value">${escapeHtml(upload.originalName)}</div>
+          </div>
+          <div class="upload-meta-card">
+            <div class="upload-meta-label">文件大小</div>
+            <div class="upload-meta-value">${escapeHtml(formatBytes(upload.sizeBytes))}</div>
+          </div>
+          <div class="upload-meta-card">
+            <div class="upload-meta-label">创建时间</div>
+            <div class="upload-meta-value">${escapeHtml(formatTime(upload.createdAt))}</div>
+          </div>
+          <div class="upload-meta-card">
+            <div class="upload-meta-label">最近状态时间</div>
+            <div class="upload-meta-value">${escapeHtml(formatTime(upload.updatedAt))}</div>
+          </div>
+        `;
+        item.appendChild(metaGrid);
+
+        if (upload.note) {
+          const note = document.createElement("div");
+          note.className = "subtle";
+          note.style.marginTop = "10px";
+          note.textContent = upload.note;
+          item.appendChild(note);
+        }
+
+        if (upload.errorText) {
+          const errorBox = document.createElement("div");
+          errorBox.className = "error-text";
+          errorBox.textContent = upload.errorText;
+          item.appendChild(errorBox);
+        }
+
+        const actions = document.createElement("div");
+        actions.className = "upload-actions";
+
+        actions.appendChild(
+          createActionButton("刷新", "secondary-btn", () => {
+            loadUploads({ silent: false }).catch((error) => {
+              showFlash("error", String(error.message || error));
+            });
+          }, false)
+        );
+
+        actions.appendChild(
+          createActionButton("触发处理", "secondary-btn", () => {
+            processUpload(upload.uploadId).catch((error) => {
+              showFlash("error", String(error.message || error));
+            });
+          }, !uploadCanProcess(upload))
+        );
+
+        actions.appendChild(
+          createActionButton("打开批次", "primary-btn", () => {
+            if (!upload.batchName) {
+              showFlash("error", "当前记录还没有可打开的 batch 名称。");
+              return;
+            }
+            window.open(`/web/index.html?batch=${encodeURIComponent(upload.batchName)}`, "_blank", "noopener");
+          }, !uploadCanOpen(upload))
+        );
+
+        actions.appendChild(
+          createActionButton("删除", "danger-btn", () => {
+            deleteUpload(upload.uploadId).catch((error) => {
+              showFlash("error", String(error.message || error));
+            });
+          }, !upload.uploadId)
+        );
+
+        item.appendChild(actions);
+        uploadsList.appendChild(item);
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? "" : value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function resetForm(options = {}) {
+      uploadType.value = "trajectory4";
+      visibilityScope.value = "private";
+      annotationMode.value = "view_only";
+      displayNameInput.value = "";
+      uploadFileInput.value = "";
+      if (options.clearFlash !== false) {
+        hideFlash();
+      }
+    }
+
+    function currentFormPayload() {
+      const file = uploadFileInput.files && uploadFileInput.files[0];
+      return {
+        file,
+        body: {
+          upload_type: uploadType.value,
+          visibility_scope: visibilityScope.value,
+          annotation_mode: annotationMode.value,
+          display_name: displayNameInput.value.trim() || undefined,
+          original_name: file ? file.name : undefined
+        }
+      };
+    }
+
+    async function loadActor() {
+      const payload = await apiFetch("/api/me");
+      state.actor = resolveActor(payload);
+      renderActor();
+      return state.actor;
+    }
+
+    async function loadUploads(options = {}) {
+      const payload = await apiFetch("/api/uploads");
+      state.uploads = firstArray(payload).map(normalizeUpload);
+      renderUploads();
+      if (!options.silent) {
+        showFlash("info", `已刷新 ${state.uploads.length} 条上传记录。`);
+      }
+      return state.uploads;
+    }
+
+    async function createUploadRecord(body) {
+      const payload = await apiFetch("/api/uploads", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+      return payload && typeof payload === "object"
+        ? payload.upload || payload.item || payload
+        : {};
+    }
+
+    async function uploadBlob(uploadId, file) {
+      return apiFetch(`/api/uploads/${encodeURIComponent(uploadId)}/blob`, {
+        method: "POST",
+        headers: {
+          "Content-Type": file.type || "application/octet-stream",
+          "X-Upload-Filename": file.name
+        },
+        body: file
+      });
+    }
+
+    async function processUpload(uploadId) {
+      if (!uploadId) {
+        throw new Error("缺少 upload id，无法触发处理。");
+      }
+      showFlash("info", `正在触发处理：${uploadId}`);
+      await apiFetch(`/api/uploads/${encodeURIComponent(uploadId)}/process`, {
+        method: "POST"
+      });
+      await loadUploads({ silent: true });
+      showFlash("success", `已触发处理：${uploadId}`);
+    }
+
+    async function deleteUpload(uploadId) {
+      if (!uploadId) {
+        throw new Error("缺少 upload id，无法删除。");
+      }
+      const confirmed = window.confirm(`确认删除上传 ${uploadId} 吗？`);
+      if (!confirmed) {
+        return;
+      }
+      showFlash("info", `正在删除：${uploadId}`);
+      await apiFetch(`/api/uploads/${encodeURIComponent(uploadId)}`, {
+        method: "DELETE"
+      });
+      await loadUploads({ silent: true });
+      showFlash("success", `已删除上传：${uploadId}`);
+    }
+
+    async function submitUpload({ processAfterUpload }) {
+      const { file, body } = currentFormPayload();
+      if (!file) {
+        showFlash("error", "先选择一个要上传的文件。");
+        return;
+      }
+
+      setBusy(true);
+      try {
+        showFlash("info", "正在创建上传记录…");
+        const created = createUploadRecord(body);
+        const upload = normalizeUpload(await created);
+        if (!upload.uploadId) {
+          throw new Error("后端未返回 upload_id，前端无法继续上传文件。");
+        }
+
+        showFlash("info", `上传记录已创建，正在传输文件：${upload.uploadId}`);
+        await uploadBlob(upload.uploadId, file);
+
+        if (processAfterUpload) {
+          showFlash("info", `文件已上传，正在触发处理：${upload.uploadId}`);
+          await processUpload(upload.uploadId);
+        } else {
+          await loadUploads({ silent: true });
+          showFlash("success", `文件已上传：${upload.uploadId}`);
+        }
+
+        resetForm({ clearFlash: false });
+      } catch (error) {
+        showFlash("error", String(error.message || error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    createUploadButton.addEventListener("click", () => {
+      submitUpload({ processAfterUpload: false });
+    });
+
+    createAndProcessButton.addEventListener("click", () => {
+      submitUpload({ processAfterUpload: true });
+    });
+
+    resetFormButton.addEventListener("click", resetForm);
+
+    refreshUploadsButton.addEventListener("click", () => {
+      loadUploads({ silent: false }).catch((error) => {
+        showFlash("error", String(error.message || error));
+      });
+    });
+
+    Promise.allSettled([loadActor(), loadUploads({ silent: true })]).then((results) => {
+      const actorResult = results[0];
+      const uploadsResult = results[1];
+
+      if (actorResult.status === "rejected") {
+        state.actor = null;
+        renderActor();
+        showFlash("error", `读取当前 actor 失败：${String(actorResult.reason && actorResult.reason.message || actorResult.reason)}`);
+      }
+
+      if (uploadsResult.status === "rejected") {
+        state.uploads = [];
+        renderUploads();
+        showFlash("error", `读取上传列表失败：${String(uploadsResult.reason && uploadsResult.reason.message || uploadsResult.reason)}`);
+      }
+
+      if (actorResult.status === "fulfilled" && uploadsResult.status === "fulfilled") {
+        showFlash("info", `欢迎回来，${state.actor.name}。当前共载入 ${state.uploads.length} 条上传记录。`);
+      }
+    });
+  </script>
+</body>
+</html>
