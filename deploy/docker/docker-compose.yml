@@ -1,0 +1,20 @@
+services:
+  studio:
+    build:
+      context: ../../..
+      dockerfile: trajectory_annotation_studio/deploy/docker/Dockerfile
+    image: trajectory-annotation-studio-offline:latest
+    container_name: trajectory-annotation-studio
+    ports:
+      - "${HOST_STUDIO_PORT:-8016}:8016"
+    cpus: "${STUDIO_CONTAINER_CPUS:-2.0}"
+    mem_limit: "${STUDIO_CONTAINER_MEM_LIMIT:-4g}"
+    environment:
+      STUDIO_PORT: "8016"
+      STUDIO_TILE_DEFAULT_MODE: "${STUDIO_TILE_DEFAULT_MODE:-online}"
+      STUDIO_TILE_INTRANET_URL: "${STUDIO_TILE_INTRANET_URL:-http://192.110.14.224:8077/styles/basic/{z}/{x}/{y}.png}"
+      STUDIO_TILE_INTRANET_ATTRIBUTION: "${STUDIO_TILE_INTRANET_ATTRIBUTION:-© Map data © OpenStreetMap contributors | Tiles © MapTiler}"
+      STUDIO_SIGNAL6_PIPELINE_MODE: "${STUDIO_SIGNAL6_PIPELINE_MODE:-v311}"
+    volumes:
+      - ../../../runtime:/opt/studio/runtime
+    restart: "${STUDIO_RESTART_POLICY:-no}"

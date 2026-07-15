@@ -1,0 +1,490 @@
+(function attachStudioManagementCore(root) {
+	const DEFAULT_UPLOAD_TYPE = "auto";
+	const modules = root.TrajectoryStudioModules || (root.TrajectoryStudioModules = {});
+
+	const formatSpecs = Object.freeze({
+		auto: {
+			title: "自动识别上传",
+			summary: "可直接上传 4 元组轨迹 CSV、6 元组信令 CSV，或 signal/gate/lbs 多源轨迹 zip；后端会自动识别并走对应处理链路。",
+			fields: [
+				{
+					key: "trajectory4",
+					name: "trajectory4",
+					type: "uid, latitude/lat, longitude/lon, timestamp_ms/timestamp",
+					required: false,
+					description: "4 元组轨迹，支持可选 status/state。",
+					accepted: ["uid", "latitude", "longitude", "timestamp_ms", "timestamp", "status"],
+				},
+				{
+					key: "signal6",
+					name: "signal6",
+					type: "uid, cid, latitude/lat, longitude/lon, t_in, t_out",
+					required: false,
+					description: "6 元组信令，支持可选 status/state，且会校验北京范围。",
+					accepted: ["uid", "cid", "latitude", "longitude", "t_in", "t_out", "status"],
+				},
+				{
+					key: "signal_triplet",
+					name: "signal/gate/lbs zip",
+					type: "zip",
+					required: false,
+					description: "每条轨迹一个文件夹，包含 signal.csv、gate.csv、lbs.csv，可选 gps.csv 用于真值比对。",
+					accepted: ["signal.csv", "gate.csv", "lbs.csv", "gps.csv"],
+				},
+			],
+			rules: [
+				"默认自动识别 4 元组轨迹、6 元组信令和多源轨迹 zip，无需手动切换上传类型。",
+				"如果同一 CSV 文件混入两种结构，系统会拒绝并提示你拆分文件。",
+				"需要自定义字段映射时，建议先明确选择 trajectory4 或 signal6 再上传；多源 zip 使用固定文件名。",
+			],
+		},
+		trajectory4: {
+			title: "4 元组轨迹文件",
+			summary: "每行是一个轨迹点，可在同一个文件里包含多个 uid；后端会按 uid 分组并按时间排序。",
+			fields: [
+				{
+					key: "uid",
+					name: "uid",
+					type: "string",
+					required: true,
+					description: "轨迹 ID。同一文件可以有多个 uid，但每行只能属于一个 uid。",
+					accepted: ["uid"],
+					placeholder: "例如 user_id / trajId",
+				},
+				{
+					key: "latitude",
+					name: "latitude / lat",
+					type: "float",
+					required: true,
+					description: "纬度，十进制度。",
+					accepted: ["latitude", "lat"],
+					placeholder: "例如 gps_lat / y",
+				},
+				{
+					key: "longitude",
+					name: "longitude / lon",
+					type: "float",
+					required: true,
+					description: "经度，十进制度。",
+					accepted: ["longitude", "lon"],
+					placeholder: "例如 gps_lon / x",
+				},
+				{
+					key: "timestamp",
+					name: "timestamp_ms / timestamp",
+					type: "epoch ms | epoch s | ISO-8601",
+					required: true,
+					description: "时间戳；支持毫秒、秒或 ISO 时间字符串。",
+					accepted: ["timestamp_ms", "timestamp"],
+					placeholder: "例如 track_time / collectTime",
+				},
+				{
+					key: "status",
+					name: "status / state",
+					type: "string",
+					required: false,
+					description: "点状态，可写 stay / walking / bicycling / driving 等。",
+					accepted: ["status", "state"],
+					placeholder: "例如 motion_state / label",
+				},
+			],
+			rules: [
+				"字段名大小写不敏感，常见 snake_case / camelCase 变体会自动兼容，例如 UID、TimestampMS。",
+				"同一个文件里不要混用 4 元组轨迹和 6 元组信令格式。",
+				"同一 uid 的多条记录会自动按时间排序；建议同一个 uid 的点都放在一个文件内。",
+			],
+		},
+		signal6: {
+			title: "6 元组信令文件",
+			summary: "每行是一条信令事件，可在同一个文件里包含多个 uid；后端会按 uid 分组，并按 t_in / t_out 排序。",
+			fields: [
+				{
+					key: "uid",
+					name: "uid",
+					type: "string",
+					required: true,
+					description: "用户或轨迹 ID。同一文件可以有多个 uid。",
+					accepted: ["uid"],
+					placeholder: "例如 user_id / subscriberId",
+				},
+				{
+					key: "cid",
+					name: "cid",
+					type: "string | integer",
+					required: true,
+					description: "基站 / 小区标识。",
+					accepted: ["cid"],
+					placeholder: "例如 cell_id / stationId",
+				},
+				{
+					key: "latitude",
+					name: "latitude / lat",
+					type: "float",
+					required: true,
+					description: "纬度，且必须落在北京范围内。",
+					accepted: ["latitude", "lat"],
+					placeholder: "例如 gps_lat / y",
+				},
+				{
+					key: "longitude",
+					name: "longitude / lon",
+					type: "float",
+					required: true,
+					description: "经度，且必须落在北京范围内。",
+					accepted: ["longitude", "lon"],
+					placeholder: "例如 gps_lon / x",
+				},
+				{
+					key: "t_in",
+					name: "t_in / start_time",
+					type: "epoch ms | epoch s | ISO-8601",
+					required: true,
+					description: "进入时间。",
+					accepted: ["t_in", "start_time", "time in", "procedureStartTime"],
+					placeholder: "例如 procedureStartTime / entry_time",
+				},
+				{
+					key: "t_out",
+					name: "t_out / end_time",
+					type: "epoch ms | epoch s | ISO-8601",
+					required: true,
+					description: "离开时间，必须大于等于 t_in。",
+					accepted: ["t_out", "end_time", "time out", "procedureEndTime", "proceduereEndTime"],
+					placeholder: "例如 procedureEndTime / exit_time",
+				},
+				{
+					key: "status",
+					name: "status / state",
+					type: "string",
+					required: false,
+					description: "状态标签，可写 road / subway / railway / unmatch 等。",
+					accepted: ["status", "state"],
+					placeholder: "例如 signal_state / scene",
+				},
+			],
+			rules: [
+				"字段名大小写不敏感，常见 snake_case / camelCase 变体会自动兼容，例如 UID、CID、TIn、TOut。",
+				"时间字段默认兼容 time in / time out、t_in / t_out、procedureStartTime / procedureEndTime，以及常见拼写变体 proceduereEndTime。",
+				"只接受北京范围坐标：lat 39.4~41.1，lon 115.7~117.4。",
+				"同一文件里每行只能是一条信令事件；同一 uid 的多条事件建议放在同一个文件内，不要拆散或混入 4 元组轨迹行。",
+			],
+		},
+		signal_triplet: {
+			title: "信令+卡口+LBS 多源轨迹包",
+			summary: "上传一个 zip 包；包内每条轨迹一个文件夹，固定包含 signal.csv、gate.csv、lbs.csv，可选 gps.csv 用作真值比对。",
+			fields: [
+				{
+					key: "signal",
+					name: "signal.csv",
+					type: "CSV",
+					required: true,
+					description: "信令输入，字段同 signal6：uid、cid、latitude/longitude、t_in、t_out。",
+					accepted: ["uid", "cid", "latitude", "longitude", "t_in", "t_out", "status"],
+				},
+				{
+					key: "gate",
+					name: "gate.csv",
+					type: "CSV",
+					required: true,
+					description: "卡口定位输入图层，字段至少包含 uid、latitude、longitude、timestamp_ms。",
+					accepted: ["uid", "gate_id", "latitude", "longitude", "timestamp_ms", "status"],
+				},
+				{
+					key: "lbs",
+					name: "lbs.csv",
+					type: "CSV",
+					required: true,
+					description: "LBS 辅助定位输入图层，支持分段点列展示。",
+					accepted: ["uid", "segment_id", "point_index", "latitude", "longitude", "timestamp_ms", "status"],
+				},
+				{
+					key: "gps",
+					name: "gps.csv",
+					type: "CSV",
+					required: false,
+					description: "真值比对轨迹；存在时生成 GPS 覆盖率、道路覆盖明细和匹配状态。",
+					accepted: ["uid", "point_index", "latitude", "longitude", "timestamp_ms", "source_file"],
+				},
+			],
+			rules: [
+				"推荐 zip 结构：route_01/signal.csv、route_01/gate.csv、route_01/lbs.csv、route_01/gps.csv。",
+				"signal.csv、gate.csv、lbs.csv 文件名必须固定；gps.csv 可省略，省略时只生成还原展示，不生成真值比对指标。",
+				"正式处理默认走 90% 展示算法：WGS84 计算、speed×稀疏度道路偏好、OD 与 FMM 还原链路。",
+			],
+			customMappingDisabled: true,
+		},
+	});
+
+	function pickFirstString() {
+		for (const value of arguments) {
+			if (typeof value === "string" && value.trim()) return value.trim();
+		}
+		return "";
+	}
+
+	function firstArray(payload) {
+		if (Array.isArray(payload)) return payload;
+		if (Array.isArray(payload && payload.items)) return payload.items;
+		if (Array.isArray(payload && payload.uploads)) return payload.uploads;
+		return [];
+	}
+
+	function defaultEscapeHtml(value) {
+		return String(value ?? "")
+			.replaceAll("&", "&amp;")
+			.replaceAll("<", "&lt;")
+			.replaceAll(">", "&gt;")
+			.replaceAll('"', "&quot;")
+			.replaceAll("'", "&#39;");
+	}
+
+	function getFormatSpec(uploadType) {
+		const normalizedType = String(uploadType || DEFAULT_UPLOAD_TYPE).trim().toLowerCase();
+		return formatSpecs[normalizedType] || formatSpecs[DEFAULT_UPLOAD_TYPE];
+	}
+
+	function buildHelpHtml(spec, helpers = {}) {
+		const escapeHtml = typeof helpers.escapeHtml === "function" ? helpers.escapeHtml : defaultEscapeHtml;
+		const normalizedSpec = spec && typeof spec === "object" ? spec : formatSpecs[DEFAULT_UPLOAD_TYPE];
+		const fieldsHtml = (normalizedSpec.fields || []).map(field => `
+			<li class="studio-management-help-item">
+				<div class="studio-management-help-field">${escapeHtml(field.name || "-")} · ${field.required ? "必填" : "可选"}</div>
+				<div class="studio-management-help-type">${escapeHtml(field.type || "-")}</div>
+				<div class="studio-management-help-desc">${escapeHtml(field.description || field.desc || "-")}</div>
+				${Array.isArray(field.accepted) && field.accepted.length ? `
+					<div class="studio-management-help-aliases-label">兼容头</div>
+					<div class="studio-management-help-aliases">${field.accepted.map(alias => `<span class="studio-management-help-alias">${escapeHtml(alias)}</span>`).join("")}</div>
+				` : ""}
+			</li>
+		`).join("");
+		const rulesHtml = (normalizedSpec.rules || []).map(rule => `<li class="studio-management-help-rule">${escapeHtml(rule)}</li>`).join("");
+		return `
+			<div class="studio-management-help-shell">
+				<div class="studio-management-help-head">
+					<div class="studio-management-help-kicker">Format Guide</div>
+					<div class="studio-management-help-title">${escapeHtml(normalizedSpec.title || "上传说明")}</div>
+					<div class="studio-management-help-summary">${escapeHtml(normalizedSpec.summary || "")}</div>
+				</div>
+				<ul class="studio-management-help-rules">${rulesHtml}</ul>
+				<ul class="studio-management-help-grid">${fieldsHtml}</ul>
+			</div>
+		`;
+	}
+
+	function getStatusClass(status) {
+		const normalized = String(status || "").toLowerCase();
+		if (!normalized) return "status-uploaded";
+		if (normalized.includes("fail") || normalized.includes("error") || normalized.includes("delete")) return "status-failed";
+		if (normalized.includes("publish") || normalized.includes("complete") || normalized.includes("ready")) return "status-published";
+		if (normalized.includes("queue") || normalized.includes("valid") || normalized.includes("process")) return "status-processing";
+		return `status-${normalized.replace(/[^a-z0-9_]+/g, "_")}`;
+	}
+
+	function resolveActor(payload) {
+		const actorPayload = payload && payload.actor && typeof payload.actor === "object"
+			? payload.actor
+			: (payload && typeof payload === "object" ? payload : {});
+		const id = pickFirstString(
+			actorPayload.actor_id,
+			actorPayload.user_id,
+			actorPayload.id,
+			actorPayload.username,
+			actorPayload.login
+		) || "-";
+		const name = pickFirstString(
+			actorPayload.display_name,
+			actorPayload.name,
+			actorPayload.username,
+			actorPayload.login,
+			actorPayload.actor_id,
+			actorPayload.user_id
+		) || "未识别身份";
+		const role = pickFirstString(actorPayload.role, actorPayload.actor_role, actorPayload.type) || "unknown";
+		return {
+			id,
+			name,
+			role,
+			description: pickFirstString(actorPayload.description, actorPayload.email),
+			raw: actorPayload,
+		};
+	}
+
+	function normalizeUpload(item, helpers = {}) {
+		const formatVisibilityScope = typeof helpers.formatVisibilityScope === "function"
+			? helpers.formatVisibilityScope
+			: (value => String(value || "-"));
+		const formatAnnotationMode = typeof helpers.formatAnnotationMode === "function"
+			? helpers.formatAnnotationMode
+			: (value => String(value || "-"));
+		const formatSignal6AlgorithmProfile = typeof helpers.formatSignal6AlgorithmProfile === "function"
+			? helpers.formatSignal6AlgorithmProfile
+			: (value => String(value || "-"));
+		const upload = item && typeof item === "object" ? item : {};
+		const uploadId = pickFirstString(upload.upload_id, upload.id);
+		const status = pickFirstString(upload.status, upload.lifecycle_status) || "created";
+		const visibility = pickFirstString(upload.visibility_scope, upload.visibility, upload.requested_visibility) || "-";
+		const annotationMode = pickFirstString(
+			upload.annotation_mode,
+			upload.annotation,
+			upload.annotation_enabled ? "annotatable" : ""
+		) || "-";
+		const fieldMapping = upload && upload.field_mapping && typeof upload.field_mapping === "object"
+			? upload.field_mapping
+			: null;
+		const batchName = pickFirstString(
+			upload.batch_name,
+			upload.published_batch_name,
+			upload.publication_batch_name,
+			upload.publication && upload.publication.batch_name,
+			upload.batch && upload.batch.name,
+			upload.result && upload.result.batch_name
+		);
+		return {
+			raw: upload,
+			uploadId,
+			status,
+			statusClass: getStatusClass(status),
+			displayName: pickFirstString(upload.display_name, upload.original_name, upload.filename, upload.safe_name, uploadId) || "-",
+			originalName: pickFirstString(upload.original_name, upload.filename, upload.safe_name) || "-",
+			uploadType: pickFirstString(upload.upload_type, upload.source_kind, upload.type) || "-",
+			signal6AlgorithmProfile: pickFirstString(upload.signal6_algorithm_profile, upload.algorithm_profile) || "",
+			signal6AlgorithmProfileLabel: formatSignal6AlgorithmProfile(
+				pickFirstString(upload.signal6_algorithm_profile, upload.algorithm_profile)
+			),
+			visibility,
+			visibilityLabel: formatVisibilityScope(visibility),
+			annotationMode,
+			annotationModeLabel: formatAnnotationMode(annotationMode),
+			fieldMapping,
+			hasCustomFieldMapping: !!(fieldMapping && Object.keys(fieldMapping).length),
+			customFieldCount: fieldMapping ? Object.keys(fieldMapping).length : 0,
+			batchName,
+			sizeBytes: Number.isFinite(upload.size_bytes) ? upload.size_bytes : Number(upload.size_bytes),
+			createdAt: pickFirstString(upload.created_at, upload.updated_at),
+			updatedAt: pickFirstString(upload.updated_at, upload.processed_at, upload.published_at),
+			errorText: pickFirstString(upload.error, upload.error_summary, upload.error_message, upload.failure_reason),
+			note: pickFirstString(upload.note, upload.validation_summary, upload.message),
+		};
+	}
+
+	function parseRawPayload(rawText) {
+		if (!rawText) return {};
+		try {
+			return JSON.parse(rawText);
+		} catch (_) {
+			return { raw: rawText };
+		}
+	}
+
+	async function createUploadRecord(apiFetchJson, body) {
+		const payload = await apiFetchJson("/api/uploads", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+		return payload && (payload.upload || payload.item || payload) || {};
+	}
+
+	async function fetchActor(apiFetchJson) {
+		const payload = await apiFetchJson("/api/me");
+		return resolveActor(payload);
+	}
+
+	async function fetchUploads(apiFetchJson, helpers = {}) {
+		const payload = await apiFetchJson("/api/uploads");
+		return firstArray(payload).map(item => normalizeUpload(item, helpers));
+	}
+
+	async function fetchBatches(apiFetchJson) {
+		const payload = await apiFetchJson("/api/batches");
+		return {
+			currentBatch: pickFirstString(payload && payload.current_batch),
+			items: firstArray(payload && payload.batches),
+		};
+	}
+
+	async function fetchReviewerReviews(apiFetchJson, params = {}) {
+		const url = new URL("/api/reviews", root.location?.origin || "http://localhost");
+		Object.entries(params || {}).forEach(([key, value]) => {
+			if (value == null || value === "") return;
+			url.searchParams.set(key, value);
+		});
+		return apiFetchJson(`${url.pathname}${url.search}`);
+	}
+
+	async function exportReviewerBundle(apiFetchJson, body) {
+		return apiFetchJson("/api/export/reviewer-bundle", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body || {}),
+		});
+	}
+
+	function triggerDownload(url, filename = "") {
+		const anchor = root.document?.createElement ? root.document.createElement("a") : null;
+		if (!anchor) {
+			root.location.href = url;
+			return;
+		}
+		anchor.href = url;
+		if (filename) anchor.download = filename;
+		anchor.rel = "noopener";
+		anchor.style.display = "none";
+		root.document.body?.appendChild(anchor);
+		anchor.click();
+		anchor.remove();
+	}
+
+	function uploadBlob(deps, uploadId, file, options = {}) {
+		const pickString = deps && typeof deps.pickFirstString === "function" ? deps.pickFirstString : pickFirstString;
+		const XhrCtor = deps && deps.XMLHttpRequest ? deps.XMLHttpRequest : root.XMLHttpRequest;
+		return new Promise((resolve, reject) => {
+			const xhr = new XhrCtor();
+			xhr.open("POST", `/api/uploads/${encodeURIComponent(uploadId)}/blob`, true);
+			xhr.withCredentials = true;
+			xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+			xhr.setRequestHeader("X-Upload-Filename", file.name);
+			xhr.upload.addEventListener("progress", event => {
+				if (typeof options.onProgress === "function") options.onProgress(event);
+			});
+			xhr.onerror = () => reject(new Error("文件上传失败，网络异常或请求被中断。"));
+			xhr.onabort = () => reject(new Error("文件上传已中断。"));
+			xhr.onload = () => {
+				const payload = parseRawPayload(xhr.responseText || "");
+				if (xhr.status >= 200 && xhr.status < 300) {
+					resolve(payload);
+					return;
+				}
+				reject(new Error(
+					pickString(
+						payload && payload.error,
+						payload && payload.message,
+						payload && payload.detail,
+						typeof (payload && payload.raw) === "string" ? payload.raw : "",
+						`请求失败: ${xhr.status || "upload"}`
+					)
+				));
+			};
+			xhr.send(file);
+		});
+	}
+
+	modules.studioAdminCore = Object.freeze({
+		DEFAULT_UPLOAD_TYPE,
+		formatSpecs,
+		getFormatSpec,
+		buildHelpHtml,
+		getStatusClass,
+		resolveActor,
+		normalizeUpload,
+		parseRawPayload,
+		createUploadRecord,
+		fetchActor,
+		fetchBatches,
+		fetchReviewerReviews,
+		fetchUploads,
+		exportReviewerBundle,
+		triggerDownload,
+		uploadBlob,
+	});
+})(typeof window !== "undefined" ? window : globalThis);

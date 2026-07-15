@@ -19,9 +19,11 @@
 
 - 真实数据
 - `data/` 下的运行产物
+- `.runtime/` 下的本机 pid / log / 启停脚本
 - 本地路径
 - 服务器私有路径
-- 缓存、日志、备份
+- 缓存、日志
+- `_backup_*` 目录里的历史归档快照
 
 ## 3. 当你的数据格式不同
 
@@ -54,11 +56,35 @@
 - 没有真实数据进入 Git
 - 没有私有路径进入 Git
 - 改合同时已更新 `docs/`
+- 新增或修改文档时已更新 `docs/INDEX.md`
+- 改当前行为、命令、合同或目录结构时已更新 `CURRENT.md`
+- 后续 agent 可执行的规则写进 `AGENTS.md` 或 `docs/DOCS_MAINTENANCE.md`，不要只留在聊天记录里
 - 你的改动属于核心逻辑还是适配层，边界清楚
+
+最小验证基线：
+
+```bash
+cd /Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio
+python3 scripts/check_docs_entrypoints.py
+python3 -m unittest web.test_review_lib web.test_review_server scripts.tests.test_check_docs_entrypoints scripts.tests.test_server_batch_tools scripts.tests.test_research_arena_v15_layer_adapter scripts.tests.test_adapter_template
+python3 scripts/check_index_html_inline_js.py
+```
+
+如果改了包入口或启动链，再补一条：
+
+```bash
+cd /Users/ocean/Documents/Playground/Cellular-projects
+python3 -m trajectory_annotation_studio.web.review_server --help
+```
 
 ## 6. 进一步阅读
 
 - [README.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/README.md)
+- [CURRENT.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/CURRENT.md)
+- [AGENTS.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/AGENTS.md)
+- [docs/README.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/README.md)
+- [docs/INDEX.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/INDEX.md)
+- [docs/DOCS_MAINTENANCE.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/DOCS_MAINTENANCE.md)
 - [docs/03-协作与仓库规范.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/03-%E5%8D%8F%E4%BD%9C%E4%B8%8E%E4%BB%93%E5%BA%93%E8%A7%84%E8%8C%83.md)
 - [docs/05-组内共享部署与数据接入规范.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/05-%E7%BB%84%E5%86%85%E5%85%B1%E4%BA%AB%E9%83%A8%E7%BD%B2%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%8E%A5%E5%85%A5%E8%A7%84%E8%8C%83.md)
 - [docs/07-仓库治理与 GitHub-服务器协作.md](/Users/ocean/Documents/Playground/Cellular-projects/trajectory_annotation_studio/docs/07-%E4%BB%93%E5%BA%93%E6%B2%BB%E7%90%86%E4%B8%8E%20GitHub-%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%8D%8F%E4%BD%9C.md)

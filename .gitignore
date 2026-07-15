@@ -21,6 +21,7 @@ __pycache__/
 dist/
 build/
 .cache/
+.codex_run/
 tmp/
 logs/
 coverage/
@@ -28,6 +29,8 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 node_modules/
+.runtime/
+test-results/
 
 # Local data
 project_data/
@@ -37,3 +40,5 @@ configs/local/
 # Local backups / experiments
 _backup_*/
 scratch/
+*.runtime.log
+.runtime_*.log

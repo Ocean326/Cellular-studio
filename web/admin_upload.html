@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trajectory Annotation Studio Admin Upload</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f1e8;
+      --panel: rgba(255, 252, 244, 0.92);
+      --panel-strong: #fff9ee;
+      --border: #d8cdb8;
+      --text: #2d2416;
+      --muted: #6a5c49;
+      --accent: #8d4f20;
+      --accent-soft: #f1dfc5;
+      --danger: #8d2f2f;
+      --success: #2f6f52;
+      font-family: "IBM Plex Sans", "Noto Sans SC", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(255, 235, 205, 0.8), transparent 35%),
+        linear-gradient(180deg, #f6f0e2 0%, #efe7d8 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+    }
+
+    .lead {
+      margin: 0 0 24px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 12px 30px rgba(62, 43, 18, 0.08);
+      backdrop-filter: blur(10px);
+    }
+
+    .panel + .panel {
+      margin-top: 20px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    label {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    input[type="file"] {
+      max-width: 100%;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 16px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: var(--accent-soft);
+      color: var(--text);
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.7;
+    }
+
+    .meta {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .status {
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .status.info {
+      background: rgba(141, 79, 32, 0.09);
+      color: var(--text);
+    }
+
+    .status.success {
+      background: rgba(47, 111, 82, 0.12);
+      color: var(--success);
+    }
+
+    .status.error {
+      background: rgba(141, 47, 47, 0.12);
+      color: var(--danger);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(216, 205, 184, 0.7);
+      vertical-align: top;
+    }
+
+    th {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+
+    code {
+      font-family: "SFMono-Regular", "Consolas", monospace;
+      font-size: 12px;
+      background: rgba(111, 92, 73, 0.09);
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Admin Upload / Intake</h1>
+    <p class="lead">
+      这页只负责把标准或待处理的 <code>.zip</code> 上传到 <code>incoming</code>。校验、发布、adapter 转换仍由后续脚本完成。
+    </p>
+
+    <section class="panel stack">
+      <div class="row">
+        <label for="zipFile">选择 zip 包</label>
+        <input id="zipFile" type="file" accept=".zip,application/zip" />
+        <button id="uploadButton">上传到 incoming</button>
+        <button id="refreshButton" class="secondary" type="button">刷新列表</button>
+      </div>
+      <div class="meta" id="configMeta">读取配置中…</div>
+      <div id="flash" class="status info hidden"></div>
+    </section>
+
+    <section class="panel">
+      <div class="row" style="justify-content: space-between;">
+        <strong>Incoming 队列</strong>
+        <span class="meta" id="itemCount">0 items</span>
+      </div>
+      <div style="overflow-x:auto; margin-top: 12px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Upload ID</th>
+              <th>Status</th>
+              <th>Original Name</th>
+              <th>Size</th>
+              <th>Created At</th>
+              <th>Payload</th>
+            </tr>
+          </thead>
+          <tbody id="incomingBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const flash = document.getElementById("flash");
+    const configMeta = document.getElementById("configMeta");
+    const itemCount = document.getElementById("itemCount");
+    const incomingBody = document.getElementById("incomingBody");
+    const uploadButton = document.getElementById("uploadButton");
+    const refreshButton = document.getElementById("refreshButton");
+    const zipFileInput = document.getElementById("zipFile");
+
+    function showFlash(kind, message) {
+      flash.className = `status ${kind}`;
+      flash.textContent = message;
+      flash.classList.remove("hidden");
+    }
+
+    function clearFlash() {
+      flash.classList.add("hidden");
+      flash.textContent = "";
+    }
+
+    function formatBytes(value) {
+      if (!Number.isFinite(value) || value < 0) {
+        return "-";
+      }
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let size = value;
+      let index = 0;
+      while (size >= 1024 && index < units.length - 1) {
+        size /= 1024;
+        index += 1;
+      }
+      return `${size.toFixed(size >= 100 || index === 0 ? 0 : 1)} ${units[index]}`;
+    }
+
+    function renderItems(items) {
+      itemCount.textContent = `${items.length} item${items.length === 1 ? "" : "s"}`;
+      incomingBody.innerHTML = "";
+      if (!items.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 6;
+        cell.className = "meta";
+        cell.textContent = "当前没有上传记录。";
+        row.appendChild(cell);
+        incomingBody.appendChild(row);
+        return;
+      }
+      for (const item of items) {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td><code>${item.upload_id || "-"}</code></td>
+          <td>${item.status || "-"}</td>
+          <td>${item.original_name || item.safe_name || "-"}</td>
+          <td>${formatBytes(item.size_bytes)}</td>
+          <td>${item.created_at || "-"}</td>
+          <td><code>${item.payload_path || "-"}</code></td>
+        `;
+        incomingBody.appendChild(row);
+      }
+    }
+
+    async function loadIncoming() {
+      const response = await fetch("/api/admin/incoming", { credentials: "same-origin" });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "读取 incoming 状态失败");
+      }
+      configMeta.textContent = `incoming_root: ${payload.incoming_root} | upload_max_bytes: ${payload.upload_max_bytes}`;
+      renderItems(payload.items || []);
+      return payload;
+    }
+
+    async function uploadCurrentFile() {
+      const file = zipFileInput.files && zipFileInput.files[0];
+      if (!file) {
+        showFlash("error", "先选择一个 .zip 文件。");
+        return;
+      }
+      clearFlash();
+      uploadButton.disabled = true;
+      try {
+        const response = await fetch(`/api/admin/incoming/upload?name=${encodeURIComponent(file.name)}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/zip",
+            "X-Upload-Filename": file.name
+          },
+          body: file
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || "上传失败");
+        }
+        showFlash("success", `上传成功：${payload.item.upload_id}`);
+        zipFileInput.value = "";
+        await loadIncoming();
+      } catch (error) {
+        showFlash("error", String(error.message || error));
+      } finally {
+        uploadButton.disabled = false;
+      }
+    }
+
+    uploadButton.addEventListener("click", uploadCurrentFile);
+    refreshButton.addEventListener("click", async () => {
+      clearFlash();
+      try {
+        await loadIncoming();
+      } catch (error) {
+        showFlash("error", String(error.message || error));
+      }
+    });
+
+    loadIncoming().catch((error) => {
+      showFlash("error", String(error.message || error));
+      configMeta.textContent = "incoming 未配置或不可访问";
+      renderItems([]);
+    });
+  </script>
+</body>
+</html>

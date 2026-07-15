@@ -1,0 +1,22 @@
+services:
+  studio:
+    image: "${STUDIO_IMAGE_TAG:-trajectory-annotation-studio-offline:latest}"
+    container_name: "${STUDIO_CONTAINER_NAME:-trajectory-annotation-studio}"
+    ports:
+      - "${HOST_STUDIO_PORT:-8016}:8016"
+    cpus: "${STUDIO_CONTAINER_CPUS:-2.0}"
+    mem_limit: "${STUDIO_CONTAINER_MEM_LIMIT:-4g}"
+    environment:
+      STUDIO_PORT: "8016"
+      STUDIO_TILE_DEFAULT_MODE: "${STUDIO_TILE_DEFAULT_MODE:-online}"
+      STUDIO_TILE_INTRANET_URL: "${STUDIO_TILE_INTRANET_URL:-http://192.110.14.224:8077/styles/basic/{z}/{x}/{y}.png}"
+      STUDIO_TILE_INTRANET_ATTRIBUTION: "${STUDIO_TILE_INTRANET_ATTRIBUTION:-© Map data © OpenStreetMap contributors | Tiles © MapTiler}"
+      STUDIO_TILE_INTRANET_COORDINATE_SYSTEM: "${STUDIO_TILE_INTRANET_COORDINATE_SYSTEM:-wgs84}"
+      STUDIO_TILE_INTRANET_MIN_ZOOM: "${STUDIO_TILE_INTRANET_MIN_ZOOM:-3}"
+      STUDIO_TILE_INTRANET_MAX_NATIVE_ZOOM: "${STUDIO_TILE_INTRANET_MAX_NATIVE_ZOOM:-19}"
+      STUDIO_TILE_INTRANET_MAX_ZOOM: "${STUDIO_TILE_INTRANET_MAX_ZOOM:-19}"
+      STUDIO_TILE_INTRANET_DETECT_RETINA: "${STUDIO_TILE_INTRANET_DETECT_RETINA:-1}"
+      STUDIO_SIGNAL6_PIPELINE_MODE: "${STUDIO_SIGNAL6_PIPELINE_MODE:-v311}"
+    volumes:
+      - ../../../runtime:/opt/studio/runtime
+    restart: "${STUDIO_RESTART_POLICY:-no}"

@@ -1,0 +1,13 @@
+numpy>=1.26
+pandas>=2.2
+tqdm
+geopy
+shapely>=2.0
+geopandas>=1.0
+fiona>=1.9
+pyproj>=3.6
+pyogrio>=0.7
+matplotlib
+Pillow
+pyshp
+scikit-learn>=1.4

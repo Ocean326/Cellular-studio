@@ -8,3 +8,6 @@ version = "0.1.0"
 description = "Local stdlib-only trajectory review server baseline"
 readme = "README.md"
 requires-python = ">=3.11"
+
+[project.scripts]
+studio-agent = "trajectory_annotation_studio.scripts.studio_agent_cli:main"
